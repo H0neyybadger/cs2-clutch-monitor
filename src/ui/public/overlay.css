@@ -1,0 +1,344 @@
+/* ============================================
+   CS2 Clutch Mode — Overlay Styles
+   Compact, high-contrast, translucent overlay
+   Designed for: floating window, stream source, Electron
+   ============================================ */
+
+:root {
+  --ov-bg: rgba(13, 15, 18, 0.88);
+  --ov-border: rgba(42, 47, 58, 0.6);
+  --ov-text: #e8eaf0;
+  --ov-muted: #6b7280;
+  --ov-orange: #f97316;
+  --ov-green: #22c55e;
+  --ov-red: #ef4444;
+  --ov-blue: #3b82f6;
+  --ov-glow: rgba(249, 115, 22, 0.3);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Remove all focus artifacts */
+*:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Remove selection artifacts */
+::selection {
+  background: transparent;
+}
+
+::-moz-selection {
+  background: transparent;
+}
+
+/* Remove active/hover artifacts when unfocused */
+.overlay:not(:focus-within) .ov-drag-handle:hover {
+  border-bottom-color: rgba(42, 47, 58, 0.3);
+}
+
+.overlay:not(:focus-within) .ov-ct-btn:hover {
+  border-color: var(--ov-border);
+  color: var(--ov-muted);
+}
+
+html {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: transparent !important;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--ov-text);
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+
+.overlay {
+  background: var(--ov-bg);
+  border: 2px solid var(--ov-border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  min-width: 260px;
+  max-width: 340px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.overlay.clutch-active {
+  border-color: var(--ov-orange);
+  box-shadow: 0 0 30px var(--ov-glow), 0 0 60px rgba(249, 115, 22, 0.15);
+}
+
+/* Border flash animation when brought to front */
+.overlay.border-flash {
+  animation: flashBorder 1s ease;
+}
+
+@keyframes flashBorder {
+  0%, 100% {
+    border-color: var(--ov-border);
+    box-shadow: none;
+  }
+  25% {
+    border-color: var(--ov-orange);
+    box-shadow: 0 0 20px var(--ov-glow), 0 0 40px rgba(249, 115, 22, 0.2);
+  }
+  50% {
+    border-color: var(--ov-border);
+    box-shadow: none;
+  }
+  75% {
+    border-color: var(--ov-orange);
+    box-shadow: 0 0 20px var(--ov-glow), 0 0 40px rgba(249, 115, 22, 0.2);
+  }
+}
+
+/* Don't flash if already in clutch-active state */
+.overlay.clutch-active.border-flash {
+  animation: none;
+}
+
+/* Header */
+.overlay-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.overlay-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ov-muted);
+  transition: all 0.4s ease;
+  order: -1;
+}
+
+.overlay-dot.active {
+  background: var(--ov-orange);
+  box-shadow: 0 0 10px var(--ov-orange), 0 0 20px rgba(249, 115, 22, 0.4);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.overlay-dot.standby {
+  background: var(--ov-green);
+  box-shadow: 0 0 6px var(--ov-green);
+}
+
+.overlay-title {
+  font-size: 36px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--ov-text);
+  transition: all 0.4s ease;
+  text-shadow: 
+    0 0 8px rgba(249, 115, 22, 0.2),
+    0 0 16px rgba(249, 115, 22, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.overlay.clutch-active .overlay-title {
+  color: var(--ov-orange);
+  font-size: 36px;
+  text-shadow: 
+    0 0 15px rgba(249, 115, 22, 0.6),
+    0 0 30px rgba(249, 115, 22, 0.4),
+    0 0 45px rgba(249, 115, 22, 0.2),
+    0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* Main state (subtext) */
+.overlay-state {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+  margin-bottom: 10px;
+  margin-top: 8px;
+  color: var(--ov-muted);
+  transition: all 0.3s ease;
+}
+
+.overlay-state.active {
+  color: var(--ov-text);
+  font-weight: 400;
+}
+
+.overlay-state.standby {
+  color: var(--ov-muted);
+  font-size: 16px;
+}
+
+/* Round Timer */
+.overlay-timer {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ov-text);
+  margin-bottom: 10px;
+  min-height: 24px;
+  text-shadow: 
+    0 0 6px rgba(249, 115, 22, 0.15),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+  transition: all 0.3s ease;
+}
+
+/* Counts */
+.overlay-counts {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ov-muted);
+  margin-bottom: 6px;
+  min-height: 20px;
+}
+
+.overlay-counts .alive-team {
+  color: var(--ov-green);
+  font-weight: 600;
+}
+
+.overlay-counts .alive-enemy {
+  color: var(--ov-red);
+  font-weight: 600;
+}
+
+/* Meta */
+.overlay-meta {
+  font-size: 0.7rem;
+  color: var(--ov-muted);
+  opacity: 0.7;
+  min-height: 1rem;
+}
+
+/* ── Electron-specific elements ──────────────── */
+
+/* Interactive hotspot - always clickable even in click-through mode */
+.ov-hotspot {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 30px;
+  cursor: pointer;
+  z-index: 1000;
+  display: none;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+body.electron .ov-hotspot {
+  display: block;
+}
+
+/* Temporary notification */
+.ov-notification {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13, 15, 18, 0.95);
+  border: 1px solid var(--ov-orange);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ov-orange);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 999;
+  white-space: nowrap;
+}
+
+.ov-notification.show {
+  opacity: 1;
+}
+
+.ov-notification.fade-out {
+  opacity: 0;
+}
+
+/* Draggable overlay when click-through is OFF */
+body.electron.interactive .overlay {
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+body.electron.interactive .overlay:active {
+  cursor: grabbing;
+}
+
+/* Make all content non-draggable so text doesn't interfere */
+body.electron .overlay-header,
+body.electron .overlay-state,
+body.electron .overlay-timer,
+body.electron .overlay-counts,
+body.electron .overlay-meta {
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+/* In Electron, fill the window completely with no gaps */
+body.electron {
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+body.electron .overlay {
+  border-radius: 10px;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  padding: 20px 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* When used as OBS browser source, body bg is transparent */
+@media (prefers-color-scheme: dark) {
+  body { background: transparent; }
+}

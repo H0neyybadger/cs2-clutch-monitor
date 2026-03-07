@@ -1,0 +1,21 @@
+{
+  "gsi": {
+    "port": 3001,
+    "host": "127.0.0.1",
+    "endpoint": "/cs2"
+  },
+  "discord": {
+    "clientId": "",
+    "rpcTimeout": 5000
+  },
+  "clutch": {
+    "volumePercent": 20,
+    "restoreVolumePercent": 100,
+    "fadeDurationMs": 500,
+    "restoreDelayMs": 2000
+  },
+  "logging": {
+    "level": "info",
+    "timestamp": true
+  }
+}

@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS2 Clutch Mode — Dashboard</title>
+  <link rel="stylesheet" href="styles-enhanced.css">
+</head>
+<body>
+
+  <!-- ============ HEADER ============ -->
+  <header class="header">
+    <div class="header-left">
+      <div class="header-logo">CS2 Clutch Mode <span>Dashboard</span></div>
+    </div>
+    <div class="header-right">
+      <div class="header-indicator">
+        <span class="indicator-dot" id="ind-server"></span>
+        <span>Server</span>
+      </div>
+      <div class="header-indicator">
+        <span class="indicator-dot" id="ind-discord"></span>
+        <span id="ind-discord-label">Discord</span>
+      </div>
+      <div class="header-indicator">
+        <span class="indicator-dot" id="ind-gsi"></span>
+        <span>GSI</span>
+      </div>
+      <div class="header-indicator">
+        <span class="indicator-dot" id="ind-presence"></span>
+        <span id="ind-presence-label">Presence</span>
+      </div>
+      <a href="/overlay" target="_blank" class="header-link">Overlay</a>
+      <span class="last-update" id="last-update-time"></span>
+    </div>
+  </header>
+
+  <!-- ============ TOAST CONTAINER ============ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ============ TAB NAVIGATION ============ -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
+    <button class="tab-btn" data-tab="history" onclick="switchTab('history')">📜 History</button>
+    <button class="tab-btn" data-tab="controls" onclick="switchTab('controls')">⚙️ Controls</button>
+    <button class="tab-btn" data-tab="diagnostics" onclick="switchTab('diagnostics')">🔧 Diagnostics</button>
+  </nav>
+
+  <!-- ============ MAIN CONTENT ============ -->
+  <div class="main-content">
+
+    <!-- ============================================
+         TAB: OVERVIEW
+         ============================================ -->
+    <div class="tab-content active" id="tab-overview">
+
+      <!-- Status Summary -->
+      <div class="row row-4">
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-clutches-session">0</div>
+          <div class="stat-label">Clutches This Session</div>
+        </div>
+        <div class="card stat-card" id="current-clutch-card">
+          <div class="stat-value" id="stat-current-scenario">Monitoring</div>
+          <div class="stat-label">Current Scenario</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-highest-clutch">—</div>
+          <div class="stat-label">Highest Clutch</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="stat-win-rate">—</div>
+          <div class="stat-label">Win Rate</div>
+        </div>
+      </div>
+
+      <!-- Current Clutch Status -->
+      <div class="row row-1">
+        <div class="card clutch-status-card" id="clutch-status-card">
+          <div class="card-header">
+            <span class="card-title">🎯 Current Clutch Status</span>
+            <span class="card-badge" id="clutch-status-badge">Monitoring</span>
+          </div>
+          <div id="clutch-status-content">
+            <div class="clutch-status-grid">
+              <div class="clutch-status-main">
+                <div class="clutch-scenario-display" id="clutch-scenario-display">
+                  <div class="scenario-text">Waiting for clutch...</div>
+                </div>
+                <div class="clutch-threat-level" id="clutch-threat-level">
+                  <span class="threat-label">Threat Level:</span>
+                  <span class="threat-value">—</span>
+                </div>
+              </div>
+              <div class="clutch-status-stats">
+                <div class="clutch-stat-item">
+                  <span class="clutch-stat-label">Round Timer</span>
+                  <span class="clutch-stat-value" id="clutch-round-timer">—</span>
+                </div>
+                <div class="clutch-stat-item">
+                  <span class="clutch-stat-label">Team Alive</span>
+                  <span class="clutch-stat-value" id="clutch-team-alive">—</span>
+                </div>
+                <div class="clutch-stat-item">
+                  <span class="clutch-stat-label">Enemy Alive</span>
+                  <span class="clutch-stat-value" id="clutch-enemy-alive">—</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Match + Session Stats -->
+      <div class="row row-2">
+        <!-- Live Match Panel -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🎮 Live Match</span>
+            <span class="card-badge" id="match-badge">No Data</span>
+          </div>
+          <div id="live-match-content">
+            <div class="empty-state">
+              <div class="empty-state-icon">🎮</div>
+              <div class="empty-state-text">Waiting for match data...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session Stats Panel -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📊 Session Stats</span>
+          </div>
+          <div id="session-stats-content">
+            <div class="stats-grid">
+              <div class="stat-item">
+                <div class="stat-item-label">Attempts</div>
+                <div class="stat-item-value" id="session-attempts">0</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-item-label">Won</div>
+                <div class="stat-item-value green" id="session-won">0</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-item-label">Lost</div>
+                <div class="stat-item-value red" id="session-lost">0</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-item-label">Win Rate</div>
+                <div class="stat-item-value" id="session-winrate">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Clutches Preview (Top 5) -->
+      <div class="row row-1">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📜 Recent Clutches</span>
+            <button class="filter-btn" onclick="switchTab('history')" style="font-size:0.68rem;padding:2px 8px">View All</button>
+          </div>
+          <div id="clutch-history-preview">
+            <div class="empty-state">
+              <div class="empty-state-text">No clutches yet this session</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END TAB: OVERVIEW -->
+
+    <!-- ============================================
+         TAB: HISTORY
+         ============================================ -->
+    <div class="tab-content" id="tab-history">
+
+      <!-- Clutch History + Timeline -->
+      <div class="row row-2">
+        <!-- Full Clutch History -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📜 Clutch History</span>
+            <button class="filter-btn" onclick="clearClutchHistory()" style="font-size:0.68rem;padding:2px 8px">Clear</button>
+          </div>
+          <div id="clutch-history-content">
+            <div class="empty-state">
+              <div class="empty-state-text">No clutches yet this session</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clutch Timeline -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⏱️ Clutch Timeline</span>
+            <span class="card-badge" id="timeline-badge">—</span>
+          </div>
+          <div id="clutch-timeline-content">
+            <div class="empty-state">
+              <div class="empty-state-text">No active clutch</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Highlight Markers -->
+      <div class="row row-1">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⭐ Highlight Markers</span>
+            <button class="btn btn-clutch btn-compact" onclick="markHighlight()">Mark Highlight</button>
+          </div>
+          <div id="highlight-markers-content">
+            <div class="empty-state">
+              <div class="empty-state-text">No highlights marked yet</div>
+              <div class="empty-state-hint">Click "Mark Highlight" to save a moment</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lifetime Stats -->
+      <div class="row row-4">
+        <div class="card stat-card">
+          <div class="stat-value" id="lifetime-attempts">0</div>
+          <div class="stat-label">Total Attempts</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value green" id="lifetime-won">0</div>
+          <div class="stat-label">Total Won</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="lifetime-highest">—</div>
+          <div class="stat-label">Best Clutch</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="lifetime-winrate">—</div>
+          <div class="stat-label">Overall Win Rate</div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END TAB: HISTORY -->
+
+    <!-- ============================================
+         TAB: CONTROLS
+         ============================================ -->
+    <div class="tab-content" id="tab-controls">
+
+      <!-- Overlay Controls + Audio Controls -->
+      <div class="row row-2">
+        <!-- Overlay Control Center -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🖥️ Overlay Control</span>
+            <span class="card-badge" id="overlay-status-badge">—</span>
+          </div>
+          <div id="overlay-control-content">
+            <div class="control-grid">
+              <div class="control-item">
+                <span class="control-label">Overlay Visible</span>
+                <span class="control-value" id="overlay-visible">—</span>
+              </div>
+              <div class="control-item">
+                <span class="control-label">Click-Through</span>
+                <span class="control-value" id="overlay-clickthrough">—</span>
+              </div>
+              <div class="control-item">
+                <span class="control-label">Current Mode</span>
+                <span class="control-value" id="overlay-mode">—</span>
+              </div>
+              <div class="control-item">
+                <span class="control-label">Hotkey</span>
+                <span class="control-value">Ctrl+Shift+X</span>
+              </div>
+            </div>
+            <div class="control-actions">
+              <a href="/overlay" target="_blank" class="btn btn-secondary btn-compact">Open Overlay</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio/Hype Control -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔊 Audio Control</span>
+          </div>
+          <div id="audio-control-content">
+            <div class="control-grid">
+              <div class="control-item">
+                <span class="control-label">Ducking Enabled</span>
+                <span class="control-value green">Active</span>
+              </div>
+              <div class="control-item">
+                <span class="control-label">Clutch Volume</span>
+                <span class="control-value" id="audio-clutch-vol">—</span>
+              </div>
+              <div class="control-item">
+                <span class="control-label">Restore Volume</span>
+                <span class="control-value" id="audio-restore-vol">—</span>
+              </div>
+              <div class="control-item">
+                <span class="control-label">Fade Duration</span>
+                <span class="control-value" id="audio-fade-dur">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Discord Presence Configuration -->
+      <div class="row row-1">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">💬 Discord Presence</span>
+            <span class="card-badge" id="presence-badge">—</span>
+          </div>
+          <div id="presence-content">
+            <div class="presence-empty-state">
+              <div class="presence-empty-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="22" stroke="#3a3f4a" stroke-width="2" stroke-dasharray="4 4"/><text x="24" y="28" text-anchor="middle" fill="#5a6170" font-size="16">?</text></svg>
+              </div>
+              <div class="presence-empty-text">No Rich Presence active</div>
+              <div class="presence-empty-hint">Use Test Controls or start CS2 to see presence</div>
+            </div>
+          </div>
+          <div id="presence-keys" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- Sound Pack Selection (Future) -->
+      <div class="row row-1">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔊 Sound Pack</span>
+            <span class="card-badge badge-inactive">Coming Soon</span>
+          </div>
+          <div class="empty-state">
+            <div class="empty-state-text">Custom sound packs will be available in a future update</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trigger Sensitivity (Future) -->
+      <div class="row row-1">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🎚️ Trigger Sensitivity</span>
+            <span class="card-badge badge-inactive">Coming Soon</span>
+          </div>
+          <div class="empty-state">
+            <div class="empty-state-text">Clutch detection sensitivity settings coming soon</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END TAB: CONTROLS -->
+
+    <!-- ============================================
+         TAB: DIAGNOSTICS
+         ============================================ -->
+    <div class="tab-content" id="tab-diagnostics">
+
+      <!-- Detection Health + Discord RPC Status -->
+      <div class="row row-2">
+        <!-- Detection Health -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔍 Detection Health</span>
+            <span class="card-badge" id="detection-health-badge">—</span>
+          </div>
+          <div id="detection-health-content">
+            <div class="health-grid">
+              <div class="health-item">
+                <span class="health-icon" id="health-gsi-icon">●</span>
+                <span class="health-label">GSI Listening</span>
+                <span class="health-value" id="health-gsi">—</span>
+              </div>
+              <div class="health-item">
+                <span class="health-icon" id="health-feed-icon">●</span>
+                <span class="health-label">Feed Status</span>
+                <span class="health-value" id="health-feed">—</span>
+              </div>
+              <div class="health-item">
+                <span class="health-icon" id="health-latency-icon">●</span>
+                <span class="health-label">Last Update</span>
+                <span class="health-value" id="health-latency">—</span>
+              </div>
+              <div class="health-item">
+                <span class="health-icon" id="health-confidence-icon">●</span>
+                <span class="health-label">Confidence</span>
+                <span class="health-value" id="health-confidence">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discord RPC Diagnostics -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔧 Discord RPC Status</span>
+            <span class="card-badge" id="diag-badge">—</span>
+          </div>
+          <div id="diagnostics-content">
+            <div class="empty-state">
+              <div class="empty-state-text">Loading diagnostics…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Test Controls + Event Log -->
+      <div class="row row-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🧪 Quick Test Controls</span>
+          </div>
+          <div class="controls-section">
+            <div class="controls-label">Clutch Scenarios</div>
+            <div class="btn-row-5">
+              <button class="btn btn-clutch btn-compact" onclick="testClutch(1)"><span class="btn-text">1v1</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutch(2)"><span class="btn-text">1v2</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutch(3)"><span class="btn-text">1v3</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutch(4)"><span class="btn-text">1v4</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutch(5)"><span class="btn-text">1v5</span><span class="spinner"></span></button>
+            </div>
+            <div class="controls-label" style="margin-top:10px">Presence</div>
+            <div class="btn-row-2">
+              <button class="btn btn-normal" onclick="testAction('normal')"><span class="btn-text">Normal Presence</span><span class="spinner"></span></button>
+              <button class="btn btn-clear" onclick="testAction('clear')"><span class="btn-text">Clear Presence</span><span class="spinner"></span></button>
+            </div>
+            <div class="controls-label" style="margin-top:10px">Round Simulation</div>
+            <div class="btn-row-3">
+              <button class="btn btn-secondary" onclick="testAction('round/start')"><span class="btn-text">Round Start</span><span class="spinner"></span></button>
+              <button class="btn btn-secondary" onclick="testAction('round/end')"><span class="btn-text">Round End</span><span class="spinner"></span></button>
+              <button class="btn btn-secondary" onclick="refreshAll()"><span class="btn-text">Refresh</span><span class="spinner"></span></button>
+            </div>
+          </div>
+          <div class="btn-result" id="action-result"></div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Event Feed</span>
+            <button class="filter-btn" onclick="clearEventLog()" style="font-size:0.68rem;padding:2px 8px">Clear</button>
+          </div>
+          <div class="event-log-controls">
+            <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
+            <button class="filter-btn" data-filter="discord" onclick="setFilter('discord',this)">Discord</button>
+            <button class="filter-btn" data-filter="clutch" onclick="setFilter('clutch',this)">Clutch</button>
+            <button class="filter-btn" data-filter="gsi" onclick="setFilter('gsi',this)">GSI</button>
+            <button class="filter-btn" data-filter="system" onclick="setFilter('system',this)">System</button>
+            <button class="filter-btn" data-filter="error" onclick="setFilter('error',this)">Errors</button>
+          </div>
+          <div class="event-log-scroll" id="event-log">
+            <div class="event-empty">No events yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game State Simulator -->
+      <div class="row row-1">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚙️ Game State Simulator</span>
+            <span class="card-badge badge-active" style="font-size:0.65rem">Testing Harness</span>
+          </div>
+          <div class="sim-layout">
+            <div class="sim-fields">
+              <div class="sim-row">
+                <label class="sim-label">Map</label>
+                <select id="sim-map" class="sim-input">
+                  <option value="de_dust2">de_dust2</option>
+                  <option value="de_mirage">de_mirage</option>
+                  <option value="de_inferno">de_inferno</option>
+                  <option value="de_nuke">de_nuke</option>
+                  <option value="de_anubis">de_anubis</option>
+                  <option value="de_ancient">de_ancient</option>
+                  <option value="de_vertigo">de_vertigo</option>
+                </select>
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Round #</label>
+                <input id="sim-round" type="number" class="sim-input" value="1" min="1" max="30">
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Round Phase</label>
+                <select id="sim-round-phase" class="sim-input">
+                  <option value="live">live</option>
+                  <option value="freezetime">freezetime</option>
+                  <option value="over">over</option>
+                </select>
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Map Phase</label>
+                <select id="sim-map-phase" class="sim-input">
+                  <option value="live">live</option>
+                  <option value="warmup">warmup</option>
+                  <option value="intermission">intermission</option>
+                  <option value="gameover">gameover</option>
+                </select>
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Team</label>
+                <select id="sim-team" class="sim-input">
+                  <option value="CT">CT</option>
+                  <option value="T">T</option>
+                </select>
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Player Alive</label>
+                <select id="sim-alive" class="sim-input">
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Team Alive</label>
+                <input id="sim-team-alive" type="number" class="sim-input" value="1" min="0" max="5">
+              </div>
+              <div class="sim-row">
+                <label class="sim-label">Enemy Alive</label>
+                <input id="sim-enemy-alive" type="number" class="sim-input" value="2" min="0" max="5">
+              </div>
+            </div>
+            <div class="sim-actions">
+              <button class="btn btn-clutch" onclick="applySimulator()" style="width:100%"><span class="btn-text">Apply State</span><span class="spinner"></span></button>
+              <button class="btn btn-secondary" onclick="resetSimulator()" style="width:100%"><span class="btn-text">Reset</span></button>
+              <div class="sim-presets-label">Quick Presets</div>
+              <button class="btn btn-secondary btn-compact" onclick="simPreset('1v1')">1v1 Live</button>
+              <button class="btn btn-secondary btn-compact" onclick="simPreset('1v2')">1v2 Live</button>
+              <button class="btn btn-secondary btn-compact" onclick="simPreset('1v3')">1v3 Live</button>
+              <button class="btn btn-secondary btn-compact" onclick="simPreset('1v4')">1v4 Live</button>
+              <button class="btn btn-secondary btn-compact" onclick="simPreset('over')">Round Over</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GSI State + Settings -->
+      <div class="row row-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🎮 GSI Game State</span>
+            <span class="card-badge" id="gs-badge">No Data</span>
+          </div>
+          <div id="game-state-content">
+            <div class="empty-state">
+              <div class="empty-state-icon">🎮</div>
+              <div class="empty-state-text">Waiting for CS2 game-state data…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚙️ Settings / Configuration</span>
+          </div>
+          <div id="settings-content">
+            <div class="empty-state">
+              <div class="empty-state-text">Loading configuration…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Debug Metrics -->
+      <div class="row row-4">
+        <div class="card stat-card">
+          <div class="stat-value" id="debug-events">0</div>
+          <div class="stat-label">Total Events</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="debug-gsi-updates">0</div>
+          <div class="stat-label">GSI Updates</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="debug-presence-updates">0</div>
+          <div class="stat-label">Presence Updates</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value" id="debug-uptime">—</div>
+          <div class="stat-label">Session Uptime</div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END TAB: DIAGNOSTICS -->
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

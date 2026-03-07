@@ -1,0 +1,447 @@
+{
+  "description": "Example CS2 Game State Integration payloads for testing",
+  "payloads": [
+    {
+      "name": "Warmup - No clutch",
+      "description": "Game is in warmup phase, should not trigger clutch",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_dust2",
+          "phase": "warmup",
+          "round": 0
+        },
+        "round": {
+          "phase": "warmup"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "CT",
+          "state": {
+            "health": 100,
+            "armor": 100,
+            "helmet": true
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "CT",
+            "state": { "health": 100 }
+          },
+          "76561198000000001": {
+            "team": "CT",
+            "state": { "health": 100 }
+          },
+          "76561198000000002": {
+            "team": "T",
+            "state": { "health": 100 }
+          }
+        }
+      }
+    },
+    {
+      "name": "Live Round - Multiple teammates alive",
+      "description": "Player and multiple teammates alive, should not trigger clutch",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_dust2",
+          "phase": "live",
+          "round": 5
+        },
+        "round": {
+          "phase": "live"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "CT",
+          "state": {
+            "health": 75,
+            "armor": 50,
+            "helmet": true,
+            "flashed": 0,
+            "smoked": 0,
+            "burning": 0,
+            "money": 4500,
+            "round_kills": 1,
+            "round_killhs": 0
+          },
+          "match_stats": {
+            "kills": 8,
+            "assists": 2,
+            "deaths": 4,
+            "mvps": 1,
+            "score": 18
+          }
+        },
+        "team": {
+          "CT": {
+            "score": 3,
+            "consecutive_round_losses": 0,
+            "timeouts_remaining": 1,
+            "matches_won_this_series": 0
+          },
+          "T": {
+            "score": 2,
+            "consecutive_round_losses": 1,
+            "timeouts_remaining": 1,
+            "matches_won_this_series": 0
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "CT",
+            "state": { "health": 75 }
+          },
+          "76561198000000001": {
+            "team": "CT",
+            "state": { "health": 100 }
+          },
+          "76561198000000003": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000004": {
+            "team": "CT",
+            "state": { "health": 100 }
+          },
+          "76561198000000005": {
+            "team": "CT",
+            "state": { "health": 50 }
+          },
+          "76561198000000010": {
+            "team": "T",
+            "state": { "health": 100 }
+          },
+          "76561198000000011": {
+            "team": "T",
+            "state": { "health": 100 }
+          }
+        }
+      }
+    },
+    {
+      "name": "Clutch Situation - 1v3",
+      "description": "Player is last alive on team with 3 enemies alive - SHOULD trigger clutch",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_mirage",
+          "phase": "live",
+          "round": 12
+        },
+        "round": {
+          "phase": "live",
+          "bomb": "planted"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "CT",
+          "state": {
+            "health": 35,
+            "armor": 0,
+            "helmet": false,
+            "flashed": 50,
+            "smoked": 0,
+            "burning": 0,
+            "money": 1200,
+            "round_kills": 2,
+            "round_killhs": 1
+          },
+          "match_stats": {
+            "kills": 15,
+            "assists": 3,
+            "deaths": 8,
+            "mvps": 3,
+            "score": 33
+          }
+        },
+        "team": {
+          "CT": {
+            "score": 7,
+            "consecutive_round_losses": 2,
+            "timeouts_remaining": 0,
+            "matches_won_this_series": 0
+          },
+          "T": {
+            "score": 5,
+            "consecutive_round_losses": 0,
+            "timeouts_remaining": 1,
+            "matches_won_this_series": 0
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "CT",
+            "state": { "health": 35 }
+          },
+          "76561198000000001": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000003": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000004": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000005": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000010": {
+            "team": "T",
+            "state": { "health": 100 }
+          },
+          "76561198000000011": {
+            "team": "T",
+            "state": { "health": 85 }
+          },
+          "76561198000000012": {
+            "team": "T",
+            "state": { "health": 42 }
+          }
+        }
+      }
+    },
+    {
+      "name": "Clutch Situation - 1v1",
+      "description": "1v1 clutch situation - SHOULD trigger clutch",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_inferno",
+          "phase": "live",
+          "round": 24
+        },
+        "round": {
+          "phase": "live",
+          "bomb": "planted"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "T",
+          "state": {
+            "health": 100,
+            "armor": 100,
+            "helmet": true,
+            "flashed": 0,
+            "smoked": 0,
+            "burning": 0,
+            "money": 50,
+            "round_kills": 3,
+            "round_killhs": 2
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "T",
+            "state": { "health": 100 }
+          },
+          "76561198000000001": {
+            "team": "T",
+            "state": { "health": 0 }
+          },
+          "76561198000000002": {
+            "team": "T",
+            "state": { "health": 0 }
+          },
+          "76561198000000003": {
+            "team": "T",
+            "state": { "health": 0 }
+          },
+          "76561198000000004": {
+            "team": "T",
+            "state": { "health": 0 }
+          },
+          "76561198000000020": {
+            "team": "CT",
+            "state": { "health": 100 }
+          },
+          "76561198000000021": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000022": {
+            "team": "CT",
+            "state": { "health": 0 }
+          }
+        }
+      }
+    },
+    {
+      "name": "Round Over - Should exit clutch",
+      "description": "Round has ended - should restore volume",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_mirage",
+          "phase": "live",
+          "round": 12
+        },
+        "round": {
+          "phase": "over",
+          "win_team": "CT"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "CT",
+          "state": {
+            "health": 100
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "CT",
+            "state": { "health": 100 }
+          }
+        }
+      }
+    },
+    {
+      "name": "Freezetime - Should not trigger clutch",
+      "description": "Round is in freezetime - should not be considered clutch",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_dust2",
+          "phase": "live",
+          "round": 15
+        },
+        "round": {
+          "phase": "freezetime"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "CT",
+          "state": {
+            "health": 100,
+            "armor": 100,
+            "helmet": true
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "CT",
+            "state": { "health": 100 }
+          },
+          "76561198000000001": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000002": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000003": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000004": {
+            "team": "CT",
+            "state": { "health": 0 }
+          },
+          "76561198000000010": {
+            "team": "T",
+            "state": { "health": 100 }
+          },
+          "76561198000000011": {
+            "team": "T",
+            "state": { "health": 100 }
+          }
+        }
+      }
+    },
+    {
+      "name": "Player Dead - Should not trigger clutch",
+      "description": "Player is dead, even though teammates are alive - should not trigger clutch",
+      "payload": {
+        "provider": {
+          "name": "Counter-Strike: Global Offensive",
+          "appid": 730,
+          "version": 1,
+          "steamid": "76561198000000000",
+          "timestamp": 1709856000
+        },
+        "map": {
+          "mode": "competitive",
+          "name": "de_ancient",
+          "phase": "live",
+          "round": 8
+        },
+        "round": {
+          "phase": "live"
+        },
+        "player": {
+          "steamid": "76561198000000000",
+          "name": "TestPlayer",
+          "team": "T",
+          "state": {
+            "health": 0,
+            "armor": 0
+          }
+        },
+        "allplayers": {
+          "76561198000000000": {
+            "team": "T",
+            "state": { "health": 0 }
+          },
+          "76561198000000001": {
+            "team": "T",
+            "state": { "health": 25 }
+          }
+        }
+      }
+    }
+  ]
+}

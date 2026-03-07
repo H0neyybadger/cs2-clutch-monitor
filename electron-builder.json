@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.cs2clutchmode.overlay",
+  "productName": "CS2 Clutch Mode",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "src/**/*",
+    "dist/**/*",
+    "config/**/*",
+    "node_modules/**/*",
+    "package.json",
+    "!src/testing/**",
+    "!dist/testing/**",
+    "!dist/electron/**",
+    "!**/*.ts",
+    "!**/*.d.ts",
+    "!**/*.ts.map",
+    "!**/*.d.ts.map",
+    "!**/*.js.map",
+    "!**/tsconfig.json"
+  ],
+  "extraFiles": [
+    {
+      "from": "assets",
+      "to": "assets",
+      "filter": ["**/*"]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "assets/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "artifactName": "CS2-Clutch-Mode-Setup-${version}.exe"
+  },
+  "portable": {
+    "artifactName": "CS2-Clutch-Mode-${version}-portable.exe"
+  },
+  "asar": false,
+  "npmRebuild": false,
+  "extraMetadata": {
+    "main": "src/electron/main.js"
+  }
+}

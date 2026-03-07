@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS2 Clutch Mode — Overlay</title>
+  <link rel="stylesheet" href="/ui/overlay.css">
+</head>
+<body>
+
+  <div class="overlay" id="overlay">
+    <!-- Interactive hotspot for click-through toggle (always clickable) -->
+    <div class="ov-hotspot" id="ov-hotspot" title="Right-click to toggle click-through (Ctrl+Shift+X)"></div>
+
+    <!-- Temporary notification (fades after showing) -->
+    <div class="ov-notification" id="ov-notification"></div>
+
+    <!-- Top label -->
+    <div class="overlay-header">
+      <div class="overlay-dot" id="ov-dot"></div>
+      <span class="overlay-title" id="ov-title">CLUTCH MONITOR</span>
+    </div>
+
+    <!-- Main state -->
+    <div class="overlay-state" id="ov-state">Waiting for last-alive detection.</div>
+
+    <!-- Round Timer -->
+    <div class="overlay-timer" id="ov-timer">--:--</div>
+
+    <!-- Player counts -->
+    <div class="overlay-counts" id="ov-counts"></div>
+
+    <!-- Map/round info -->
+    <div class="overlay-meta" id="ov-meta"></div>
+  </div>
+
+  <script src="/ui/overlay.js"></script>
+</body>
+</html>
