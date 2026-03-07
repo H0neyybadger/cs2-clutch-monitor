@@ -140,8 +140,8 @@ C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\ga
 ### **Clone & Install**
 
 ```bash
-git clone https://github.com/yourusername/cs2-discord-clutch.git
-cd cs2-discord-clutch
+git clone https://github.com/H0neyybadger/cs2-clutch-monitor.git
+cd cs2-clutch-monitor
 npm install
 ```
 
@@ -321,8 +321,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/yourusername/cs2-discord-clutch/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/yourusername/cs2-discord-clutch/discussions)
+- **Issues:** [GitHub Issues](https://github.com/H0neyybadger/cs2-clutch-monitor/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/H0neyybadger/cs2-clutch-monitor/discussions)
 
 ---
 
