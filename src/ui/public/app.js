@@ -350,6 +350,7 @@ function trackClutchEvent(evt) {
 // ============ UPDATE STATUS ============
 function updateStatus(data) {
   lastStatus = data;
+  updateStatusIndicators();
 
   // Update top summary cards
   document.getElementById('stat-clutches-session').textContent = sessionStats.attempts;
@@ -1055,20 +1056,64 @@ function renderSettings(data) {
 }
 
 // ============ TEST ACTIONS ============
-async function testClutch(count) {
+
+// Test overlay visuals only (no Discord ducking)
+async function testOverlayOnly(count) {
+  const btn = event.currentTarget;
+  setLoading(btn, true);
+  showResult('');
+  const res = await api('POST', `/api/test/overlay-only/${count}`);
+  setLoading(btn, false);
+  if (res.ok) {
+    showResult(`Overlay test 1v${count} (no Discord ducking)`, 'success');
+    toast(`Overlay test 1v${count} activated`, 'success');
+    updateStatusIndicators();
+  } else {
+    showResult(res.data.error || 'Failed', 'error');
+    toast(res.data.error || 'Overlay test failed', 'error');
+  }
+  setTimeout(refreshAll, 300);
+}
+
+// Test full clutch simulation (with Discord ducking)
+async function testClutchFull(count) {
   const btn = event.currentTarget;
   setLoading(btn, true);
   showResult('');
   const res = await api('POST', `/api/test/clutch/${count}`);
   setLoading(btn, false);
   if (res.ok) {
-    showResult(`1v${count} clutch triggered`, 'success');
-    toast(`1v${count} clutch triggered`, 'success');
+    showResult(`Full clutch 1v${count} (with Discord ducking)`, 'success');
+    toast(`Full clutch 1v${count} activated`, 'success');
+    updateStatusIndicators();
   } else {
     showResult(res.data.error || 'Failed', 'error');
-    toast(res.data.error || 'Clutch test failed', 'error');
+    toast(res.data.error || 'Full clutch test failed', 'error');
   }
   setTimeout(refreshAll, 300);
+}
+
+// Restore normal state and end test
+async function testRestore() {
+  const btn = event.currentTarget;
+  setLoading(btn, true);
+  showResult('');
+  const res = await api('POST', '/api/test/restore');
+  setLoading(btn, false);
+  if (res.ok) {
+    showResult('Test ended - audio restored', 'success');
+    toast('Normal state restored', 'success');
+    updateStatusIndicators();
+  } else {
+    showResult(res.data.error || 'Failed', 'error');
+    toast(res.data.error || 'Restore failed', 'error');
+  }
+  setTimeout(refreshAll, 300);
+}
+
+// Legacy function for compatibility
+async function testClutch(count) {
+  return testClutchFull(count);
 }
 
 async function testAction(action) {
@@ -1081,11 +1126,37 @@ async function testAction(action) {
   if (res.ok) {
     showResult(`${label} — success`, 'success');
     toast(`${label} action completed`, 'success');
+    updateStatusIndicators();
   } else {
     showResult(res.data.error || 'Failed', 'error');
     toast(res.data.error || `${label} failed`, 'error');
   }
   setTimeout(refreshAll, 300);
+}
+
+// Update status indicator dots
+function updateStatusIndicators() {
+  const overlayDot = document.getElementById('overlay-status-dot');
+  const clutchDot = document.getElementById('clutch-status-dot');
+  const duckingDot = document.getElementById('ducking-status-dot');
+  
+  if (!overlayDot || !clutchDot || !duckingDot) return;
+  
+  // Overlay is active if clutch state is active (both overlay-only and full tests)
+  const overlayActive = lastStatus.clutchActive || false;
+  overlayDot.className = overlayActive ? 'status-dot active' : 'status-dot';
+  
+  // Clutch state is active
+  const clutchActive = lastStatus.clutchActive || false;
+  clutchDot.className = clutchActive ? 'status-dot active' : 'status-dot';
+  
+  // Discord ducking is active only during full clutch simulation
+  // We can infer this from scenario text or originalVolumes being set
+  const scenario = lastStatus.currentScenario || '';
+  const isFullSimulation = scenario.includes('Full Simulation');
+  const isOverlayOnly = scenario.includes('Overlay Test');
+  const duckingActive = clutchActive && isFullSimulation;
+  duckingDot.className = duckingActive ? 'status-dot warning' : 'status-dot';
 }
 
 // ============ SIMULATOR ============

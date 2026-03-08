@@ -484,26 +484,51 @@
       <div class="row row-2">
         <div class="card">
           <div class="card-header">
-            <span class="card-title">🧪 Quick Test Controls</span>
+            <span class="card-title">🧪 Test Controls</span>
           </div>
+          
+          <!-- Test Status Indicators -->
+          <div class="controls-section" style="padding-bottom:8px;border-bottom:1px solid #2a2f3a">
+            <div class="controls-label">Active Test Status</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">
+              <div class="status-indicator">
+                <span class="status-dot" id="overlay-status-dot"></span>
+                <span class="status-label">Overlay</span>
+              </div>
+              <div class="status-indicator">
+                <span class="status-dot" id="clutch-status-dot"></span>
+                <span class="status-label">Clutch State</span>
+              </div>
+              <div class="status-indicator">
+                <span class="status-dot" id="ducking-status-dot"></span>
+                <span class="status-label">Discord Ducking</span>
+              </div>
+            </div>
+          </div>
+
           <div class="controls-section">
-            <div class="controls-label">Clutch Scenarios</div>
+            <div class="controls-label">🎨 Test Overlay Only (No Discord Ducking)</div>
             <div class="btn-row-5">
-              <button class="btn btn-clutch btn-compact" onclick="testClutch(1)"><span class="btn-text">1v1</span><span class="spinner"></span></button>
-              <button class="btn btn-clutch btn-compact" onclick="testClutch(2)"><span class="btn-text">1v2</span><span class="spinner"></span></button>
-              <button class="btn btn-clutch btn-compact" onclick="testClutch(3)"><span class="btn-text">1v3</span><span class="spinner"></span></button>
-              <button class="btn btn-clutch btn-compact" onclick="testClutch(4)"><span class="btn-text">1v4</span><span class="spinner"></span></button>
-              <button class="btn btn-clutch btn-compact" onclick="testClutch(5)"><span class="btn-text">1v5</span><span class="spinner"></span></button>
+              <button class="btn btn-overlay btn-compact" onclick="testOverlayOnly(1)"><span class="btn-text">1v1</span><span class="spinner"></span></button>
+              <button class="btn btn-overlay btn-compact" onclick="testOverlayOnly(2)"><span class="btn-text">1v2</span><span class="spinner"></span></button>
+              <button class="btn btn-overlay btn-compact" onclick="testOverlayOnly(3)"><span class="btn-text">1v3</span><span class="spinner"></span></button>
+              <button class="btn btn-overlay btn-compact" onclick="testOverlayOnly(4)"><span class="btn-text">1v4</span><span class="spinner"></span></button>
+              <button class="btn btn-overlay btn-compact" onclick="testOverlayOnly(5)"><span class="btn-text">1v5</span><span class="spinner"></span></button>
             </div>
-            <div class="controls-label" style="margin-top:10px">Presence</div>
-            <div class="btn-row-2">
-              <button class="btn btn-normal" onclick="testAction('normal')"><span class="btn-text">Normal Presence</span><span class="spinner"></span></button>
-              <button class="btn btn-clear" onclick="testAction('clear')"><span class="btn-text">Clear Presence</span><span class="spinner"></span></button>
+            
+            <div class="controls-label" style="margin-top:12px">⚡ Full Clutch Simulation (With Discord Ducking)</div>
+            <div class="btn-row-5">
+              <button class="btn btn-clutch btn-compact" onclick="testClutchFull(1)"><span class="btn-text">1v1</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutchFull(2)"><span class="btn-text">1v2</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutchFull(3)"><span class="btn-text">1v3</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutchFull(4)"><span class="btn-text">1v4</span><span class="spinner"></span></button>
+              <button class="btn btn-clutch btn-compact" onclick="testClutchFull(5)"><span class="btn-text">1v5</span><span class="spinner"></span></button>
             </div>
-            <div class="controls-label" style="margin-top:10px">Round Simulation</div>
+
+            <div class="controls-label" style="margin-top:12px">🔄 Control</div>
             <div class="btn-row-3">
-              <button class="btn btn-secondary" onclick="testAction('round/start')"><span class="btn-text">Round Start</span><span class="spinner"></span></button>
-              <button class="btn btn-secondary" onclick="testAction('round/end')"><span class="btn-text">Round End</span><span class="spinner"></span></button>
+              <button class="btn btn-restore" onclick="testRestore()"><span class="btn-text">End Test / Restore Audio</span><span class="spinner"></span></button>
+              <button class="btn btn-clear" onclick="testAction('clear')"><span class="btn-text">Clear Presence</span><span class="spinner"></span></button>
               <button class="btn btn-secondary" onclick="refreshAll()"><span class="btn-text">Refresh</span><span class="spinner"></span></button>
             </div>
           </div>

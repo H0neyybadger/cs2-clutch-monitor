@@ -438,6 +438,15 @@ body {
   cursor: not-allowed;
 }
 
+.btn-overlay {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.1);
+}
+.btn-overlay:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
 .btn-clutch {
   border-color: var(--accent-orange);
   color: var(--accent-orange);
@@ -445,6 +454,15 @@ body {
 }
 .btn-clutch:hover {
   background: rgba(249, 115, 22, 0.25);
+}
+
+.btn-restore {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  background: var(--accent-green-dim);
+}
+.btn-restore:hover {
+  background: rgba(34, 197, 94, 0.2);
 }
 
 .btn-normal {
@@ -472,6 +490,41 @@ body {
 
 .btn-full {
   grid-column: 1 / -1;
+}
+
+/* ============ STATUS INDICATORS ============ */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.status-dot.active {
+  background: var(--accent-green);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.status-dot.warning {
+  background: var(--accent-orange);
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
+}
+
+.status-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .btn .spinner {

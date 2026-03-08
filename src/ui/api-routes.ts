@@ -69,7 +69,40 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
 
   // ============ TEST CONTROL ENDPOINTS ============
 
-  // POST /api/test/clutch/:count — trigger clutch 1vN
+  // POST /api/test/overlay-only/:count — trigger overlay visuals only (no Discord ducking)
+  app.post('/api/test/overlay-only/:count', async (req: Request, res: Response) => {
+    const count = parseInt(req.params.count);
+    if (isNaN(count) || count < 1 || count > 5) {
+      return res.status(400).json({ success: false, error: 'Count must be 1-5' });
+    }
+
+    try {
+      // Update UI state only - no event bus emission (no Discord side effects)
+      stateStore.currentScenario = `1v${count} Clutch (Overlay Test)`;
+      stateStore.clutchActive = true;
+
+      stateStore.pushEvent('clutch', 'info', 'TEST_OVERLAY_ONLY', `Overlay-only test: 1v${count} (no Discord ducking)`);
+      logger.info(`Overlay-only test 1v${count} triggered via UI (no Discord ducking)`);
+
+      // Update game state for the UI
+      stateStore.updateGameState({
+        playerAlive: true,
+        playerTeam: 'CT',
+        teamAliveCount: 1,
+        enemyAliveCount: count,
+        roundPhase: 'live',
+        lastPayloadTime: Date.now(),
+      });
+
+      res.json({ success: true, scenario: `1v${count}`, mode: 'overlay-only' });
+    } catch (error: any) {
+      const msg = error?.message || 'Unknown error';
+      stateStore.pushEvent('error', 'error', 'TEST_OVERLAY_FAIL', `Overlay test failed: ${msg}`);
+      res.status(500).json({ success: false, error: msg });
+    }
+  });
+
+  // POST /api/test/clutch/:count — trigger FULL clutch simulation (with Discord ducking)
   app.post('/api/test/clutch/:count', async (req: Request, res: Response) => {
     const count = parseInt(req.params.count);
     if (isNaN(count) || count < 1 || count > 5) {
@@ -77,11 +110,11 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
 
     try {
-      stateStore.currentScenario = `1v${count} Clutch`;
+      stateStore.currentScenario = `1v${count} Clutch (Full Simulation)`;
       stateStore.clutchActive = true;
 
       // Emit CLUTCH_STARTED event through the real event bus
-      // This triggers DiscordPresenceActionHandler which calls setClutchPresence
+      // This triggers ALL clutch side effects including Discord voice ducking
       const { getThreatLevel } = require('../clutch/rules');
       eventBus.emitGameEvent({
         type: GameEventType.CLUTCH_STARTED,
@@ -93,8 +126,8 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
         },
       });
 
-      stateStore.pushEvent('clutch', 'info', 'TEST_CLUTCH', `Test 1v${count} clutch triggered`);
-      logger.info(`Test clutch 1v${count} triggered via UI`);
+      stateStore.pushEvent('clutch', 'info', 'TEST_CLUTCH_FULL', `Full clutch simulation: 1v${count} (with Discord ducking)`);
+      logger.info(`Full clutch simulation 1v${count} triggered via UI (with Discord ducking)`);
 
       // Update game state for the UI
       stateStore.updateGameState({
@@ -114,14 +147,15 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/normal — set normal presence
-  app.post('/api/test/normal', async (_req: Request, res: Response) => {
+  // POST /api/test/restore — end test clutch and restore normal state
+  app.post('/api/test/restore', async (_req: Request, res: Response) => {
     try {
       stateStore.currentScenario = 'Normal';
       const wasClutch = stateStore.clutchActive;
 
       if (wasClutch) {
         // CLUTCH_ENDED triggers DiscordPresenceActionHandler which calls setNormalPresence
+        // This also restores Discord voice volume
         stateStore.clutchActive = false;
         eventBus.emitGameEvent({
           type: GameEventType.CLUTCH_ENDED,
@@ -133,8 +167,8 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
         await setNormalPresence();
       }
 
-      stateStore.pushEvent('discord', 'info', 'TEST_NORMAL', 'Normal presence set via UI');
-      logger.info('Normal presence set via UI');
+      stateStore.pushEvent('discord', 'info', 'TEST_RESTORE', 'Test ended - normal state restored');
+      logger.info('Test ended - normal state restored via UI');
       res.json({ success: true });
     } catch (error: any) {
       const msg = error?.message || 'Unknown error';
