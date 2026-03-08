@@ -12,6 +12,7 @@ import { loadConfig } from '../shared/utils';
 import { stateStore } from './state-store';
 import { mountApiRoutes } from '../ui/api-routes';
 import { mountSseEndpoint } from '../ui/sse';
+import { ensureCs2GsiConfig } from '../windows/gsi-auto-setup';
 
 const logger = createLogger('Bootstrap');
 
@@ -101,6 +102,22 @@ async function logStartupDiagnostics(): Promise<void> {
 export async function bootstrap(): Promise<void> {
   const config = loadConfig();
   logger.info('Configuration loaded');
+
+  const gsiSetupResult = ensureCs2GsiConfig(config.gsi);
+  if (!gsiSetupResult.foundInstall) {
+    logger.warn('CS2 installation not found for automatic GSI setup');
+    stateStore.pushEvent('system', 'warn', 'GSI_AUTO_SETUP_SKIPPED', 'CS2 installation not found for automatic GSI setup');
+  } else if (gsiSetupResult.created.length > 0 || gsiSetupResult.updated.length > 0) {
+    const createdCount = gsiSetupResult.created.length;
+    const updatedCount = gsiSetupResult.updated.length;
+    stateStore.pushEvent('system', 'info', 'GSI_AUTO_SETUP_OK', `Automatic CS2 GSI setup complete (${createdCount} created, ${updatedCount} updated)`);
+  } else if (gsiSetupResult.unchanged.length > 0) {
+    stateStore.pushEvent('system', 'info', 'GSI_AUTO_SETUP_OK', 'Automatic CS2 GSI setup already up to date');
+  }
+
+  if (gsiSetupResult.errors.length > 0) {
+    stateStore.pushEvent('error', 'error', 'GSI_AUTO_SETUP_FAIL', `Automatic CS2 GSI setup failed for ${gsiSetupResult.errors.length} location(s)`);
+  }
 
   const clutchEngine = new ClutchEngine(config);
   logger.info('Clutch engine initialized');

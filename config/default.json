@@ -5,7 +5,7 @@
     "endpoint": "/cs2"
   },
   "discord": {
-    "clientId": "",
+    "clientId": "1479726356303712256",
     "rpcTimeout": 5000
   },
   "clutch": {
