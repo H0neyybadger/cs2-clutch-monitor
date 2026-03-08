@@ -101,6 +101,7 @@ function getProjectRoot() {
 
 function startServer() {
   const projectRoot = getProjectRoot();
+  const runtimeConfigPath = path.join(app.getPath('userData'), 'runtime-settings.json');
   let cmd, args, env;
 
   if (app.isPackaged) {
@@ -110,22 +111,24 @@ function startServer() {
     cmd = process.execPath;
     const mainPath = path.join(projectRoot, 'dist', 'main.js');
     args = [mainPath];
-    env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+    env = { ...process.env, ELECTRON_RUN_AS_NODE: '1', CS2_CLUTCH_RUNTIME_CONFIG_PATH: runtimeConfigPath };
     log('Server startup (packaged mode):');
     log('  Command:', cmd);
     log('  Args:', args);
     log('  Main script:', mainPath);
     log('  Working dir:', projectRoot);
+    log('  Runtime config:', runtimeConfigPath);
   } else {
     // Dev mode: use ts-node to run TypeScript source
     cmd = path.join(projectRoot, 'node_modules', '.bin', 'ts-node.cmd');
     const mainPath = path.join(projectRoot, 'src', 'main.ts');
     args = [mainPath];
-    env = { ...process.env };
+    env = { ...process.env, CS2_CLUTCH_RUNTIME_CONFIG_PATH: runtimeConfigPath };
     log('Server startup (dev mode):');
     log('  Command:', cmd);
     log('  Args:', args);
     log('  Main script:', mainPath);
+    log('  Runtime config:', runtimeConfigPath);
   }
 
   serverProcess = spawn(cmd, args, {

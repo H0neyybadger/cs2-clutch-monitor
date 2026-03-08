@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from 'express';
+﻿import type { Express, Request, Response } from 'express';
 import { stateStore } from '../app/state-store';
 import { createLogger } from '../app/logger';
 import { isConnected, isMockMode } from '../discord/rpc-client';
@@ -6,6 +6,7 @@ import { setNormalPresence, clearPresence } from '../discord/presence-controller
 import { eventBus, GameEventType } from '../events/event-bus';
 import type { ClutchEngine } from '../clutch/clutch-engine';
 import type { AppConfig } from '../shared/types';
+import { saveRuntimeClutchVolumePercent } from '../shared/runtime-settings';
 
 const logger = createLogger('API-Routes');
 
@@ -14,6 +15,20 @@ function maskClientId(clientId: string): string {
   return '****' + clientId.slice(-4);
 }
 
+function serializeConfig(config: AppConfig) {
+  return {
+    clientIdMasked: maskClientId(config.discord.clientId),
+    expectedAssets: ['cs2_logo', 'clutch_icon'],
+    gsiEndpoint: config.gsi.endpoint,
+    gsiPort: config.gsi.port,
+    gsiHost: config.gsi.host,
+    clutchVolumePercent: config.clutch.volumePercent,
+    restoreVolumePercent: config.clutch.restoreVolumePercent,
+    fadeDurationMs: config.clutch.fadeDurationMs,
+    restoreDelayMs: config.clutch.restoreDelayMs,
+    logLevel: config.logging.level,
+  };
+}
 export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: ClutchEngine): void {
 
   // ============ GET /api/status ============
@@ -53,23 +68,33 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
 
   // ============ GET /api/config ============
   app.get('/api/config', (_req: Request, res: Response) => {
-    res.json({
-      clientIdMasked: maskClientId(config.discord.clientId),
-      expectedAssets: ['cs2_logo', 'clutch_icon'],
-      gsiEndpoint: config.gsi.endpoint,
-      gsiPort: config.gsi.port,
-      gsiHost: config.gsi.host,
-      clutchVolumePercent: config.clutch.volumePercent,
-      restoreVolumePercent: config.clutch.restoreVolumePercent,
-      fadeDurationMs: config.clutch.fadeDurationMs,
-      restoreDelayMs: config.clutch.restoreDelayMs,
-      logLevel: config.logging.level,
-    });
+    res.json(serializeConfig(config));
   });
 
+  // ============ POST /api/config/clutch-volume ============
+  app.post('/api/config/clutch-volume', (req: Request, res: Response) => {
+    try {
+      const requestedVolume = Number(req.body?.volumePercent);
+      if (!Number.isFinite(requestedVolume)) {
+        return res.status(400).json({ success: false, error: 'volumePercent must be a number' });
+      }
+
+      const normalizedVolume = saveRuntimeClutchVolumePercent(requestedVolume);
+      config.clutch.volumePercent = normalizedVolume;
+
+      stateStore.pushEvent('system', 'info', 'CONFIG_UPDATED', `Clutch volume updated to ${normalizedVolume}%`);
+      logger.info(`Clutch volume updated via dashboard: ${normalizedVolume}%`);
+
+      return res.json(serializeConfig(config));
+    } catch (error: any) {
+      const message = error?.message || 'Failed to update clutch volume';
+      logger.error('Failed to update clutch volume:', error);
+      return res.status(500).json({ success: false, error: message });
+    }
+  });
   // ============ TEST CONTROL ENDPOINTS ============
 
-  // POST /api/test/overlay-only/:count — trigger overlay visuals only (no Discord ducking)
+  // POST /api/test/overlay-only/:count â€” trigger overlay visuals only (no Discord ducking)
   app.post('/api/test/overlay-only/:count', async (req: Request, res: Response) => {
     const count = parseInt(req.params.count);
     if (isNaN(count) || count < 1 || count > 5) {
@@ -102,7 +127,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/clutch/:count — trigger FULL clutch simulation (with Discord ducking)
+  // POST /api/test/clutch/:count â€” trigger FULL clutch simulation (with Discord ducking)
   app.post('/api/test/clutch/:count', async (req: Request, res: Response) => {
     const count = parseInt(req.params.count);
     if (isNaN(count) || count < 1 || count > 5) {
@@ -147,7 +172,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/restore — end test clutch and restore normal state
+  // POST /api/test/restore â€” end test clutch and restore normal state
   app.post('/api/test/restore', async (_req: Request, res: Response) => {
     try {
       stateStore.currentScenario = 'Normal';
@@ -177,7 +202,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/clear — clear presence
+  // POST /api/test/clear â€” clear presence
   app.post('/api/test/clear', async (_req: Request, res: Response) => {
     try {
       stateStore.currentScenario = 'Cleared';
@@ -208,7 +233,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/round/start — simulate round start
+  // POST /api/test/round/start â€” simulate round start
   app.post('/api/test/round/start', (_req: Request, res: Response) => {
     try {
       const roundNum = (stateStore.gameState.roundNumber || 0) + 1;
@@ -225,7 +250,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/round/end — simulate round end
+  // POST /api/test/round/end â€” simulate round end
   app.post('/api/test/round/end', (_req: Request, res: Response) => {
     try {
       eventBus.emitGameEvent({
@@ -252,7 +277,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
     }
   });
 
-  // POST /api/test/simulate — full game state simulator
+  // POST /api/test/simulate â€” full game state simulator
   app.post('/api/test/simulate', (req: Request, res: Response) => {
     try {
       const {
@@ -323,7 +348,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
         lastPayloadTime: Date.now(),
       });
 
-      stateStore.pushEvent('gsi', 'info', 'SIM_STATE', `Simulator: ${mapName} R${roundNumber} — ${playerTeam} ${teamAliveCount}v${enemyAliveCount} (${roundPhase})`);
+      stateStore.pushEvent('gsi', 'info', 'SIM_STATE', `Simulator: ${mapName} R${roundNumber} â€” ${playerTeam} ${teamAliveCount}v${enemyAliveCount} (${roundPhase})`);
       logger.info(`Simulator state applied: ${teamAliveCount}v${enemyAliveCount} on ${mapName}`);
 
       res.json({ success: true });
@@ -336,3 +361,5 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
 
   logger.info('API routes mounted');
 }
+
+

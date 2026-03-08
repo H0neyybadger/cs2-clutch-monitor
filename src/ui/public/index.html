@@ -363,16 +363,25 @@
               </div>
               <div class="control-item">
                 <span class="control-label">Clutch Volume</span>
-                <span class="control-value" id="audio-clutch-vol">—</span>
+                <span class="control-value" id="audio-clutch-vol">?</span>
               </div>
               <div class="control-item">
                 <span class="control-label">Restore Volume</span>
-                <span class="control-value" id="audio-restore-vol">—</span>
+                <span class="control-value" id="audio-restore-vol">?</span>
               </div>
               <div class="control-item">
                 <span class="control-label">Fade Duration</span>
-                <span class="control-value" id="audio-fade-dur">—</span>
+                <span class="control-value" id="audio-fade-dur">?</span>
               </div>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+              <div class="controls-label">Adjust Clutch Ducking</div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 88px auto;gap:10px;align-items:center;margin-top:8px">
+                <input id="clutch-volume-slider" type="range" min="0" max="100" value="20" oninput="syncClutchVolumeInputs('slider')">
+                <input id="clutch-volume-input" type="number" class="sim-input" min="0" max="100" value="20" oninput="syncClutchVolumeInputs('input')">
+                <button class="btn btn-secondary btn-compact" onclick="saveClutchVolumeSetting()"><span class="btn-text">Save</span><span class="spinner"></span></button>
+              </div>
+              <div class="empty-state-hint" id="clutch-volume-preview" style="margin-top:8px">Discord will duck to 20% while clutch is active.</div>
             </div>
           </div>
         </div>

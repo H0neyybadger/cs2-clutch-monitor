@@ -1,10 +1,12 @@
-import { readFileSync } from 'fs';
+﻿import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import type { AppConfig } from './types';
+import { loadRuntimeClutchVolumePercent } from './runtime-settings';
 
 export function loadConfig(): AppConfig {
   const defaultConfigPath = resolve(process.cwd(), 'config', 'default.json');
   const defaultConfig = JSON.parse(readFileSync(defaultConfigPath, 'utf-8')) as AppConfig;
+  const runtimeClutchVolumePercent = loadRuntimeClutchVolumePercent();
 
   return {
     gsi: {
@@ -17,7 +19,7 @@ export function loadConfig(): AppConfig {
       rpcTimeout: defaultConfig.discord.rpcTimeout,
     },
     clutch: {
-      volumePercent: parseInt(process.env.CLUTCH_VOLUME_PERCENT || String(defaultConfig.clutch.volumePercent), 10),
+      volumePercent: runtimeClutchVolumePercent ?? parseInt(process.env.CLUTCH_VOLUME_PERCENT || String(defaultConfig.clutch.volumePercent), 10),
       restoreVolumePercent: parseInt(process.env.RESTORE_VOLUME_PERCENT || String(defaultConfig.clutch.restoreVolumePercent), 10),
       fadeDurationMs: defaultConfig.clutch.fadeDurationMs,
       restoreDelayMs: defaultConfig.clutch.restoreDelayMs,

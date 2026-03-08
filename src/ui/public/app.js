@@ -9,6 +9,7 @@ let events = [];
 let lastStatus = {};
 let lastPresence = {};
 let lastGameState = {};
+let lastConfig = {};
 let sseConnected = false;
 let presenceElapsedInterval = null;
 
@@ -1024,16 +1025,68 @@ function renderDiagnostics(data) {
 }
 
 // ============ RENDER SETTINGS ============
+function clampPercentValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function updateClutchVolumePreview(value) {
+  const preview = document.getElementById('clutch-volume-preview');
+  if (preview) {
+    preview.textContent = `Discord will duck to ${value}% while clutch is active.`;
+  }
+}
+
+function syncClutchVolumeInputs(source) {
+  const slider = document.getElementById('clutch-volume-slider');
+  const input = document.getElementById('clutch-volume-input');
+  if (!slider || !input) return;
+
+  const rawValue = source === 'input' ? input.value : slider.value;
+  const volumePercent = clampPercentValue(rawValue);
+  slider.value = String(volumePercent);
+  input.value = String(volumePercent);
+  updateClutchVolumePreview(volumePercent);
+}
+
+async function saveClutchVolumeSetting() {
+  const button = event.currentTarget;
+  const input = document.getElementById('clutch-volume-input');
+  if (!input) return;
+
+  const volumePercent = clampPercentValue(input.value);
+  setLoading(button, true);
+
+  const res = await api('POST', '/api/config/clutch-volume', { volumePercent });
+
+  setLoading(button, false);
+  if (res.ok) {
+    renderSettings(res.data);
+    toast(`Clutch volume set to ${res.data.clutchVolumePercent}%`, 'success');
+    return;
+  }
+
+  toast(res.data.error || 'Failed to save clutch volume', 'error');
+}
+
 function renderSettings(data) {
   const container = document.getElementById('settings-content');
+  lastConfig = data;
   
   // Update audio control values
   document.getElementById('audio-clutch-vol').textContent = `${data.clutchVolumePercent}%`;
   document.getElementById('audio-restore-vol').textContent = `${data.restoreVolumePercent}%`;
   document.getElementById('audio-fade-dur').textContent = `${data.fadeDurationMs}ms`;
 
+  const slider = document.getElementById('clutch-volume-slider');
+  const input = document.getElementById('clutch-volume-input');
+  if (slider) slider.value = String(data.clutchVolumePercent);
+  if (input) input.value = String(data.clutchVolumePercent);
+  updateClutchVolumePreview(data.clutchVolumePercent);
+
   const items = [
-    ['Discord Client ID', data.clientIdMasked || '—'],
+    ['Discord Client ID', data.clientIdMasked || '?'],
     ['Expected Assets', (data.expectedAssets || []).join(', ')],
     ['GSI Endpoint', data.gsiEndpoint || '?'],
     ['GSI Port', data.gsiPort || '?'],
