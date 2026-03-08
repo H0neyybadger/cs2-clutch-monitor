@@ -1,6 +1,6 @@
 import { stateStore } from '../app/state-store';
 import { createLogger } from '../app/logger';
-import { shouldEnableClutch, evaluateGameState } from './rules';
+import { shouldEnableClutch, evaluateGameState, getThreatLevel } from './rules';
 import { eventBus, GameEventType } from '../events/event-bus';
 import { detectAndEmitEvents } from '../events/event-detector';
 import { actionHandlerRegistry } from '../actions/action-handler';
@@ -51,8 +51,9 @@ export class ClutchEngine {
       enemyAliveCount = countAlivePlayers(allPlayers, enemyTeam);
     }
 
-    stateStore.currentScenario = `1v${enemyAliveCount} Clutch`;
-    stateStore.pushEvent('clutch', 'info', 'CLUTCH_STARTED', `Clutch started: 1v${enemyAliveCount} (${playerTeam})`);
+    const threatLevel = getThreatLevel(enemyAliveCount);
+    stateStore.currentScenario = `1v${enemyAliveCount} Clutch (${threatLevel} threat)`;
+    stateStore.pushEvent('clutch', 'info', 'CLUTCH_STARTED', `Clutch started: 1v${enemyAliveCount} (${playerTeam}) - Threat: ${threatLevel}`);
 
     // Track clutch attempt in session stats
     stateStore.incrementClutchAttempts(enemyAliveCount);
@@ -64,6 +65,7 @@ export class ClutchEngine {
       data: {
         playerTeam,
         enemyAliveCount,
+        threatLevel,
       },
     });
   }

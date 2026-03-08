@@ -55,6 +55,7 @@ export interface ClutchStartedEvent extends GameEvent {
   data: {
     playerTeam: string;
     enemyAliveCount: number;
+    threatLevel: string;
   };
 }
 

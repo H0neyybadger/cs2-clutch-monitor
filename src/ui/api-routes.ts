@@ -82,12 +82,14 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
 
       // Emit CLUTCH_STARTED event through the real event bus
       // This triggers DiscordPresenceActionHandler which calls setClutchPresence
+      const { getThreatLevel } = require('../clutch/rules');
       eventBus.emitGameEvent({
         type: GameEventType.CLUTCH_STARTED,
         timestamp: Date.now(),
         data: {
           playerTeam: 'CT',
           enemyAliveCount: count,
+          threatLevel: getThreatLevel(count),
         },
       });
 
