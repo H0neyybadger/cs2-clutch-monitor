@@ -29,8 +29,8 @@ export type DataStatus = 'stale' | 'pending' | 'confirmed';
 export interface UIGameState {
   playerAlive: boolean;
   playerTeam: string;
-  teamAliveCount: number;
-  enemyAliveCount: number;
+  teamAliveCount: number | null;
+  enemyAliveCount: number | null;
   roundPhase: string;
   mapPhase: string;
   mapName: string;
@@ -44,6 +44,10 @@ export interface UIGameState {
   modeReason: string;
   clutchEligible: boolean;
   clutchEligibilityReason: string;
+  rosterAvailable: boolean;
+  rosterStatus: string;
+  dataSource: string;
+  dataSourceStatus: string;
 }
 
 // --- Diagnostics for UI ---
@@ -58,15 +62,17 @@ export interface Diagnostics {
 
 // --- Session Stats from GSI ---
 export interface SessionStats {
-  kills: number;
-  deaths: number;
-  assists: number;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
   roundsPlayed: number;
   roundsWon: number;
   clutchAttempts: number;
   clutchesWon: number;
   highestClutch: number | null;
   sessionStartTime: number;
+  matchStatsAvailable: boolean;
+  matchStatsStatus: string;
 }
 
 // --- SSE listener type ---
@@ -108,8 +114,8 @@ class StateStore {
   private _gameState: UIGameState = {
     playerAlive: false,
     playerTeam: '?',
-    teamAliveCount: 0,
-    enemyAliveCount: 0,
+    teamAliveCount: null,
+    enemyAliveCount: null,
     roundPhase: '?',
     mapPhase: '?',
     mapName: '?',
@@ -123,6 +129,10 @@ class StateStore {
     modeReason: 'Unknown mode',
     clutchEligible: false,
     clutchEligibilityReason: 'Waiting for game data',
+    rosterAvailable: false,
+    rosterStatus: 'Waiting for GSI roster data',
+    dataSource: 'gsi',
+    dataSourceStatus: 'Waiting for live Counter-Strike 2 data',
   };
   private _diagnostics: Diagnostics = {
     lastDiscordReadyTime: null,
@@ -138,18 +148,24 @@ class StateStore {
   private _mockMode: boolean = false;
   private readonly _maxSSEConnections = 10; // Limit concurrent connections
   private _sessionStats: SessionStats = {
-    kills: 0,
-    deaths: 0,
-    assists: 0,
+    kills: null,
+    deaths: null,
+    assists: null,
     roundsPlayed: 0,
     roundsWon: 0,
     clutchAttempts: 0,
     clutchesWon: 0,
     highestClutch: null,
     sessionStartTime: Date.now(),
+    matchStatsAvailable: false,
+    matchStatsStatus: 'Waiting for player match stats from CS2',
   };
   private _lastRoundNumber: number = 0;
-  private _lastPlayerStats: { kills: number; deaths: number; assists: number } | null = null;
+  private _lastPlayerStats: { kills: number | null; deaths: number | null; assists: number | null } | null = null;
+  private _lastRoundWinMarker: string | null = null;
+  private _scoreTrackingTeam: string | null = null;
+  private _teamScoreBaseline: number | null = null;
+  private _lastObservedTeamScore: number | null = null;
   private _lastKnownPhase: string = '?';
   private _roundTransitionDetected: boolean = false;
 
@@ -221,23 +237,16 @@ class StateStore {
 
     // Round transition detected
     if (roundChanged) {
-      console.log(`[ROUND TRANSITION] Round ${this._lastRoundNumber} → ${newRoundNumber}`);
+      console.log(`[ROUND TRANSITION] Round ${this._lastRoundNumber} -> ${newRoundNumber}`);
       this._gameState.currentRoundId = newRoundNumber;
       this._roundTransitionDetected = true;
-      
-      // Mark data as stale when entering new round
       this._gameState.dataStatus = 'stale';
-      this._gameState.teamAliveCount = 0;
-      this._gameState.enemyAliveCount = 0;
-      this._gameState.playerAlive = false;
-      
-      console.log('[ROUND TRANSITION] Alive counts reset to 0 (stale data from previous round)');
-      this._broadcast('gameState', this._gameState);
+      console.log('[ROUND TRANSITION] Holding previous values until the next confirmed round snapshot arrives');
     }
 
     // Phase transition within same round
     if (phaseChanged && !roundChanged) {
-      console.log(`[PHASE TRANSITION] ${this._lastKnownPhase} → ${newPhase} (Round ${newRoundNumber})`);
+      console.log(`[PHASE TRANSITION] ${this._lastKnownPhase} -> ${newPhase} (Round ${newRoundNumber})`);
       
       // Entering freeze time - mark as pending
       if (newPhase === 'freezetime') {
@@ -275,45 +284,73 @@ class StateStore {
     return { ...this._sessionStats };
   }
 
-  updateSessionStats(gsiPayload: any): void {
-    if (!gsiPayload || !gsiPayload.player) return;
+  updateSessionStats(gameState: any): void {
+    if (!gameState || !gameState.player) return;
 
-    const player = gsiPayload.player;
-    const match_stats = player.match_stats || {};
-    const state = player.state || {};
-    const map = gsiPayload.map || {};
-    const round = gsiPayload.round || {};
+    const player = gameState.player;
+    const matchStats = player.match_stats || {};
+    const map = gameState.map || {};
+    const round = gameState.round || {};
+    const teamScores = gameState.team || {};
+    const providerName = typeof gameState.provider?.name === 'string' ? gameState.provider.name : 'CS2';
+    const hasMatchStats = ['kills', 'deaths', 'assists'].some((key) => typeof matchStats[key] === 'number');
 
-    // Track kills, deaths, assists from GSI
-    const currentKills = match_stats.kills || 0;
-    const currentDeaths = match_stats.deaths || 0;
-    const currentAssists = match_stats.assists || 0;
+    if (hasMatchStats) {
+      this._sessionStats.matchStatsAvailable = true;
+      this._sessionStats.matchStatsStatus = `Live player match stats received from ${providerName}`;
+    } else if (!this._sessionStats.matchStatsAvailable) {
+      this._sessionStats.matchStatsStatus = providerName === 'overwolf'
+        ? 'Waiting for player match stats from Overwolf GEP.'
+        : 'player_match_stats not present yet. Restart CS2 after the app updates the GSI config.';
+    }
 
-    // Update stats (GSI provides cumulative match stats)
-    this._sessionStats.kills = currentKills;
-    this._sessionStats.deaths = currentDeaths;
-    this._sessionStats.assists = currentAssists;
+    if (typeof matchStats.kills === 'number') {
+      this._sessionStats.kills = matchStats.kills;
+    }
 
-    // Track rounds played (when round number changes)
-    const currentRound = map.round || 0;
+    if (typeof matchStats.deaths === 'number') {
+      this._sessionStats.deaths = matchStats.deaths;
+    }
+
+    if (typeof matchStats.assists === 'number') {
+      this._sessionStats.assists = matchStats.assists;
+    }
+
+    const currentRound = typeof map.round === 'number' ? map.round : 0;
     if (currentRound > this._lastRoundNumber && this._lastRoundNumber > 0) {
       this._sessionStats.roundsPlayed++;
-      
-      // Check if player's team won the last round
-      // This is approximate - we'd need round_win event for accuracy
-      if (round.phase === 'over' && round.win_team) {
-        const playerTeam = player.team;
-        if (round.win_team === playerTeam) {
+    }
+
+    const playerTeam = player.team;
+    const playerTeamScore = playerTeam ? teamScores[playerTeam]?.score : undefined;
+    if (typeof playerTeamScore === 'number' && playerTeam) {
+      const trackingTeamChanged = this._scoreTrackingTeam !== playerTeam;
+      const scoreReset = this._lastObservedTeamScore !== null && playerTeamScore < this._lastObservedTeamScore;
+
+      if (trackingTeamChanged || scoreReset || this._teamScoreBaseline === null) {
+        this._scoreTrackingTeam = playerTeam;
+        this._teamScoreBaseline = playerTeamScore;
+      }
+
+      this._lastObservedTeamScore = playerTeamScore;
+      this._sessionStats.roundsWon = Math.max(0, playerTeamScore - (this._teamScoreBaseline ?? playerTeamScore));
+    } else if (round.phase === 'over' && round.win_team && currentRound > 0) {
+      const winMarker = `${currentRound}:${round.win_team}`;
+      if (this._lastRoundWinMarker !== winMarker) {
+        if (round.win_team === player.team) {
           this._sessionStats.roundsWon++;
         }
+        this._lastRoundWinMarker = winMarker;
       }
     }
+
     this._lastRoundNumber = currentRound;
+    this._lastPlayerStats = {
+      kills: this._sessionStats.kills,
+      deaths: this._sessionStats.deaths,
+      assists: this._sessionStats.assists,
+    };
 
-    // Store current stats for delta tracking
-    this._lastPlayerStats = { kills: currentKills, deaths: currentDeaths, assists: currentAssists };
-
-    // Broadcast stats update
     this._broadcast('stats', this._sessionStats);
   }
 
@@ -332,18 +369,24 @@ class StateStore {
 
   resetSessionStats(): void {
     this._sessionStats = {
-      kills: 0,
-      deaths: 0,
-      assists: 0,
+      kills: null,
+      deaths: null,
+      assists: null,
       roundsPlayed: 0,
       roundsWon: 0,
       clutchAttempts: 0,
       clutchesWon: 0,
       highestClutch: null,
       sessionStartTime: Date.now(),
+      matchStatsAvailable: false,
+      matchStatsStatus: 'Waiting for player match stats from CS2',
     };
     this._lastRoundNumber = 0;
     this._lastPlayerStats = null;
+    this._lastRoundWinMarker = null;
+    this._scoreTrackingTeam = null;
+    this._teamScoreBaseline = null;
+    this._lastObservedTeamScore = null;
     this._broadcast('stats', this._sessionStats);
   }
 
@@ -508,6 +551,11 @@ class StateStore {
       currentScenario: this._currentScenario,
       lastGameStateTime: this.data.lastGameStateTime,
       gsiActive: this.data.lastGameStateTime > 0 && (Date.now() - this.data.lastGameStateTime) < 30000,
+      gameDataActive: this.data.lastGameStateTime > 0 && (Date.now() - this.data.lastGameStateTime) < 30000,
+      gameDataSource: this._gameState.dataSource,
+      gameDataSourceStatus: this._gameState.dataSourceStatus,
+      gsiRosterAvailable: this._gameState.rosterAvailable,
+      gsiPlayerStatsAvailable: this._sessionStats.matchStatsAvailable,
       appStartTime: this._appStartTime,
       uptime: Date.now() - this._appStartTime,
     };
@@ -515,3 +563,7 @@ class StateStore {
 }
 
 export const stateStore = new StateStore();
+
+
+
+

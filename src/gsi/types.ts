@@ -49,14 +49,14 @@ export const GameStateSchema = z.object({
     }).optional(),
   }).optional(),
   round: z.object({
-    phase: z.enum(['live', 'freezetime', 'over']).optional(),
+    phase: z.string().optional(),
     win_team: z.enum(['CT', 'T']).optional(),
     bomb: z.enum(['planted', 'exploded', 'defused']).optional(),
   }).optional(),
   map: z.object({
     mode: z.string().optional(),
     name: z.string().optional(),
-    phase: z.enum(['warmup', 'live', 'intermission', 'gameover']).optional(),
+    phase: z.string().optional(),
     round: z.number().optional(),
     num_matches_to_win_series: z.number().optional(),
     current_spectators: z.number().optional(),
@@ -68,3 +68,4 @@ export const GameStateSchema = z.object({
 
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 export type GameState = z.infer<typeof GameStateSchema>;
+

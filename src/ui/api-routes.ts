@@ -1,4 +1,4 @@
-﻿import type { Express, Request, Response } from 'express';
+import type { Express, Request, Response } from 'express';
 import { stateStore } from '../app/state-store';
 import { createLogger } from '../app/logger';
 import { isConnected, isMockMode } from '../discord/rpc-client';
@@ -55,6 +55,9 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
   // ============ GET /api/diagnostics ============
   app.get('/api/diagnostics', (_req: Request, res: Response) => {
     const diag = stateStore.diagnostics;
+    const gameState = stateStore.gameState;
+    const sessionStats = stateStore.sessionStats;
+
     res.json({
       ...diag,
       discordConnected: isConnected(),
@@ -63,6 +66,15 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
       gsiEndpoint: config.gsi.endpoint,
       gsiPort: config.gsi.port,
       clientIdMasked: maskClientId(config.discord.clientId),
+      rosterAvailable: gameState.rosterAvailable,
+      rosterStatus: gameState.rosterStatus,
+      playerStatsAvailable: sessionStats.matchStatsAvailable,
+      playerStatsStatus: sessionStats.matchStatsStatus,
+      clutchEligibilityReason: gameState.clutchEligibilityReason,
+      dataSource: gameState.dataSource,
+      dataSourceStatus: gameState.dataSourceStatus,
+      overwolfTraceEnabled: Boolean(process.env.CS2_CLUTCH_OVERWOLF_TRACE_PATH),
+      overwolfTracePath: process.env.CS2_CLUTCH_OVERWOLF_TRACE_PATH || null,
     });
   });
 
@@ -361,5 +373,7 @@ export function mountApiRoutes(app: Express, config: AppConfig, clutchEngine: Cl
 
   logger.info('API routes mounted');
 }
+
+
 
 

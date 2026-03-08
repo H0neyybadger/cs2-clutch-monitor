@@ -30,6 +30,7 @@ function logWarn(...args) {
 const { app, BrowserWindow, Tray, Menu, shell, screen, globalShortcut, ipcMain, dialog } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const store = require('./store');
 const { createTrayIcon, createAppIcon } = require('./icon');
@@ -54,6 +55,9 @@ const DASHBOARD_URL = `http://${SERVER_HOST}:${SERVER_PORT}/ui`;
 const HEALTH_POLL_INTERVAL_MS = 500;
 const HEALTH_POLL_TIMEOUT_MS = 30000;
 const SAVE_DEBOUNCE_MS = 500;
+const OVERWOLF_PROVIDER_PATH = '/provider/overwolf';
+const OVERWOLF_BRIDGE_TIMEOUT_MS = 3000;
+const OVERWOLF_TRACE_MAX_BYTES = 5 * 1024 * 1024;
 
 // ── State ──────────────────────────────────────────────────
 let serverProcess = null;
@@ -63,6 +67,8 @@ let clickThrough = false;
 let isQuitting = false;
 let saveTimer = null;
 let didSpawnServer = false;
+let overwolfBridgeInitialized = false;
+let overwolfTracePath = null;
 
 // ── Server Management ──────────────────────────────────────
 
@@ -85,6 +91,324 @@ async function waitForServer() {
   return false;
 }
 
+function isOverwolfRuntime() {
+  return Boolean(app.overwolf && app.overwolf.packages);
+}
+
+function getOverwolfTracePath() {
+  return path.join(app.getPath('userData'), 'logs', 'overwolf-gep.ndjson');
+}
+
+function sanitizeTraceValue(value, depth = 0, seen = new WeakSet()) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return value.length > 500 ? value.slice(0, 500) + '...[truncated]' : value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (depth >= 4) {
+    return '[max-depth]';
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((entry) => sanitizeTraceValue(entry, depth + 1, seen));
+  }
+
+  if (typeof value === 'object') {
+    if (seen.has(value)) {
+      return '[circular]';
+    }
+
+    seen.add(value);
+    const out = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = sanitizeTraceValue(entry, depth + 1, seen);
+    }
+    seen.delete(value);
+    return out;
+  }
+
+  return String(value);
+}
+
+function ensureOverwolfTraceFile() {
+  if (!overwolfTracePath) {
+    overwolfTracePath = getOverwolfTracePath();
+  }
+
+  const dir = path.dirname(overwolfTracePath);
+  fs.mkdirSync(dir, { recursive: true });
+  process.env.CS2_CLUTCH_OVERWOLF_TRACE_PATH = overwolfTracePath;
+}
+
+function appendOverwolfTrace(eventType, payload) {
+  try {
+    ensureOverwolfTraceFile();
+
+    if (fs.existsSync(overwolfTracePath)) {
+      const stats = fs.statSync(overwolfTracePath);
+      if (stats.size >= OVERWOLF_TRACE_MAX_BYTES) {
+        const rotatedPath = overwolfTracePath + '.1';
+        if (fs.existsSync(rotatedPath)) {
+          fs.rmSync(rotatedPath, { force: true });
+        }
+        fs.renameSync(overwolfTracePath, rotatedPath);
+      }
+    }
+
+    const record = {
+      timestamp: new Date().toISOString(),
+      eventType,
+      payload: sanitizeTraceValue(payload),
+    };
+    fs.appendFileSync(overwolfTracePath, JSON.stringify(record) + '\n', 'utf8');
+  } catch (error) {
+    logWarn('Failed to write Overwolf trace:', error.message);
+  }
+}
+
+function postJson(pathname, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const req = http.request({
+      hostname: SERVER_HOST,
+      port: SERVER_PORT,
+      path: pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      res.resume();
+      resolve(res.statusCode >= 200 && res.statusCode < 300);
+    });
+
+    req.on('error', reject);
+    req.setTimeout(OVERWOLF_BRIDGE_TIMEOUT_MS, () => {
+      req.destroy(new Error('Request timed out'));
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function sendOverwolfBridgeMessage(kind, payload) {
+  appendOverwolfTrace(`bridge:${kind}`, payload);
+  try {
+    return await postJson(OVERWOLF_PROVIDER_PATH, { kind, payload, receivedAt: Date.now() });
+  } catch (error) {
+    logWarn('Failed to forward Overwolf payload:', error.message);
+    return false;
+  }
+}
+
+function safeParseOverwolfValue(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return value;
+    }
+  }
+
+  if (/^-?\d+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+
+  return value;
+}
+
+function normalizeOverwolfInfoSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return {};
+  }
+
+  if (snapshot.info && typeof snapshot.info === 'object') {
+    return snapshot.info;
+  }
+
+  const flattened = {};
+  for (const [category, value] of Object.entries(snapshot)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      Object.assign(flattened, value);
+    } else {
+      flattened[category] = value;
+    }
+  }
+
+  return flattened;
+}
+
+let overwolfGepBound = false;
+
+async function bindOverwolfGepPackage(gep) {
+  if (!gep || overwolfGepBound) {
+    return;
+  }
+
+  overwolfGepBound = true;
+  const requiredFeatures = ['live_data', 'match_info'];
+
+  gep.on('error', async (_event, gameId, errorText) => {
+    appendOverwolfTrace('gep:error', { gameId, errorText });
+    logError('Overwolf GEP error:', gameId, errorText);
+    await sendOverwolfBridgeMessage('status', {
+      connected: false,
+      status: `Overwolf GEP error for game ${gameId}: ${errorText}`
+    });
+  });
+
+  gep.on('elevated-privileges-required', async (_event, gameId, name, pid) => {
+    appendOverwolfTrace('gep:elevated-privileges-required', { gameId, name, pid });
+    const status = `Overwolf needs elevated privileges for ${name} (${gameId}) pid=${pid}`;
+    logWarn(status);
+    await sendOverwolfBridgeMessage('status', { connected: false, status });
+  });
+
+  gep.on('game-exit', async (_event, gameId, gameName) => {
+    appendOverwolfTrace('gep:game-exit', { gameId, gameName });
+    log('Overwolf game exit:', gameName, gameId);
+    await sendOverwolfBridgeMessage('reset', {
+      gameId,
+      status: `${gameName} exited`,
+    });
+  });
+
+  gep.on('new-info-update', async (_event, gameId, data) => {
+    appendOverwolfTrace('gep:new-info-update', { gameId, data });
+    if (!data || !data.key) {
+      return;
+    }
+
+    await sendOverwolfBridgeMessage('info', {
+      gameId,
+      [data.key]: safeParseOverwolfValue(data.value),
+    });
+  });
+
+  gep.on('new-game-event', async (_event, gameId, data) => {
+    appendOverwolfTrace('gep:new-game-event', { gameId, data });
+    if (!data || !data.key) {
+      return;
+    }
+
+    await sendOverwolfBridgeMessage('events', {
+      gameId,
+      events: [
+        {
+          name: data.key,
+          feature: data.feature,
+          data: safeParseOverwolfValue(data.value),
+        },
+      ],
+    });
+  });
+
+  gep.on('game-detected', async (gameLaunchEvent, gameId, name) => {
+    appendOverwolfTrace('gep:game-detected', { gameId, name });
+    log('Overwolf detected game:', name, gameId);
+
+    try {
+      if (gameLaunchEvent && typeof gameLaunchEvent.enable === 'function') {
+        gameLaunchEvent.enable();
+      }
+
+      await gep.setRequiredFeatures(gameId, requiredFeatures);
+      const info = await gep.getInfo(gameId);
+      appendOverwolfTrace('gep:get-info', { gameId, info });
+      await sendOverwolfBridgeMessage('status', {
+        connected: true,
+        status: `Overwolf GEP enabled for ${name} (${gameId})`,
+      });
+      await sendOverwolfBridgeMessage('info', normalizeOverwolfInfoSnapshot(info));
+    } catch (error) {
+      logError('Failed to enable Overwolf GEP features:', error);
+      await sendOverwolfBridgeMessage('status', {
+        connected: false,
+        status: `Overwolf GEP setup failed for ${name}: ${error.message}`
+      });
+    }
+  });
+
+  try {
+    const supportedGames = await gep.getSupportedGames();
+    appendOverwolfTrace('gep:supported-games', supportedGames);
+    const cs2Entry = supportedGames.find((game) => /counter[ -]?strike 2|cs2/i.test(game.name));
+    await sendOverwolfBridgeMessage('status', {
+      connected: true,
+      status: cs2Entry
+        ? `Overwolf GEP ready. Waiting for ${cs2Entry.name} (${cs2Entry.id})`
+        : 'Overwolf GEP ready. Waiting for a supported game detection event.',
+    });
+  } catch (error) {
+    logWarn('Unable to query supported Overwolf games:', error.message);
+    await sendOverwolfBridgeMessage('status', {
+      connected: true,
+      status: 'Overwolf GEP package ready. Waiting for game detection.',
+    });
+  }
+}
+
+async function initializeOverwolfBridge() {
+  if (!isOverwolfRuntime()) {
+    log('Overwolf runtime not detected; backend will use GSI mode');
+    return;
+  }
+
+  if (overwolfBridgeInitialized) {
+    return;
+  }
+
+  overwolfBridgeInitialized = true;
+  const packageManager = app.overwolf.packages;
+  log('Overwolf runtime detected; initializing GEP bridge');
+
+  appendOverwolfTrace('bridge:init', { overwolfRuntime: true });
+  await sendOverwolfBridgeMessage('status', {
+    connected: true,
+    status: 'Initializing Overwolf package bridge',
+  });
+
+  packageManager.on('failed-to-initialize', async (_event, packageName) => {
+    appendOverwolfTrace('package:failed-to-initialize', { packageName });
+    const status = `Overwolf package failed to initialize: ${packageName}`;
+    logError(status);
+    await sendOverwolfBridgeMessage('status', { connected: false, status });
+  });
+
+  packageManager.on('ready', async (_event, packageName, version) => {
+    appendOverwolfTrace('package:ready', { packageName, version });
+    log('Overwolf package ready:', packageName, version);
+    if (packageName === 'gep') {
+      await bindOverwolfGepPackage(packageManager.gep);
+    }
+  });
+
+  if (packageManager.gep) {
+    appendOverwolfTrace('package:gep-present', { immediate: true });
+    await bindOverwolfGepPackage(packageManager.gep);
+  }
+}
+
 function getProjectRoot() {
   let root;
   if (app.isPackaged) {
@@ -102,6 +426,7 @@ function getProjectRoot() {
 function startServer() {
   const projectRoot = getProjectRoot();
   const runtimeConfigPath = path.join(app.getPath('userData'), 'runtime-settings.json');
+  const tracePath = overwolfTracePath || getOverwolfTracePath();
   let cmd, args, env;
 
   if (app.isPackaged) {
@@ -111,7 +436,7 @@ function startServer() {
     cmd = process.execPath;
     const mainPath = path.join(projectRoot, 'dist', 'main.js');
     args = [mainPath];
-    env = { ...process.env, ELECTRON_RUN_AS_NODE: '1', CS2_CLUTCH_RUNTIME_CONFIG_PATH: runtimeConfigPath };
+    env = { ...process.env, ELECTRON_RUN_AS_NODE: '1', CS2_CLUTCH_RUNTIME_CONFIG_PATH: runtimeConfigPath, CS2_CLUTCH_OVERWOLF_TRACE_PATH: tracePath, CS2_CLUTCH_DATA_SOURCE: isOverwolfRuntime() ? 'overwolf' : 'gsi' };
     log('Server startup (packaged mode):');
     log('  Command:', cmd);
     log('  Args:', args);
@@ -123,7 +448,7 @@ function startServer() {
     cmd = path.join(projectRoot, 'node_modules', '.bin', 'ts-node.cmd');
     const mainPath = path.join(projectRoot, 'src', 'main.ts');
     args = [mainPath];
-    env = { ...process.env, CS2_CLUTCH_RUNTIME_CONFIG_PATH: runtimeConfigPath };
+    env = { ...process.env, CS2_CLUTCH_RUNTIME_CONFIG_PATH: runtimeConfigPath, CS2_CLUTCH_OVERWOLF_TRACE_PATH: tracePath, CS2_CLUTCH_DATA_SOURCE: isOverwolfRuntime() ? 'overwolf' : 'gsi' };
     log('Server startup (dev mode):');
     log('  Command:', cmd);
     log('  Args:', args);
@@ -523,6 +848,8 @@ app.on('ready', async () => {
   log('  clickThrough:', clickThrough);
   log('  overlayVisible:', prefs.overlayVisible);
 
+  ensureOverwolfTraceFile();
+
   // Check if backend is already running (e.g. started separately)
   let serverAlready = await isServerAlive();
 
@@ -548,6 +875,8 @@ app.on('ready', async () => {
   } else {
     log('Server already running, attaching to existing instance');
   }
+
+  await initializeOverwolfBridge();
 
   // Create tray
   createTray();

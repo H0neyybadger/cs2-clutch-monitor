@@ -24,24 +24,21 @@ interface RpcModuleInfo {
 
 async function checkRpcPackageInstalled(): Promise<RpcModuleInfo> {
   const projectRoot = process.cwd();
-  
+
   try {
-    // Try to resolve the module path
     const resolvedPath = require.resolve('discord-rpc');
     const normalizedProjectRoot = require('path').normalize(projectRoot);
     const normalizedResolvedPath = require('path').normalize(resolvedPath);
     const isLocal = normalizedResolvedPath.startsWith(normalizedProjectRoot);
 
-    // Try to load it
-    // @ts-ignore - discord-rpc is optional
     await import('discord-rpc');
-    
+
     return {
       installed: true,
       resolvedPath,
       isLocal,
     };
-  } catch (error) {
+  } catch {
     return {
       installed: false,
       resolvedPath: null,
@@ -66,7 +63,7 @@ async function fetchVoiceChannelStatus(): Promise<{ available: boolean; userCoun
     if (response && response.voice_states) {
       return { available: true, userCount: response.voice_states.length };
     }
-  } catch (error) {
+  } catch {
     // Voice channel not available
   }
 
@@ -82,16 +79,16 @@ async function logStartupDiagnostics(): Promise<void> {
   const voiceStatus = await fetchVoiceChannelStatus();
 
   logger.info(`Discord RPC package installed locally: ${rpcModuleInfo.installed ? 'yes' : 'no'}`);
-  
+
   if (rpcModuleInfo.installed && rpcModuleInfo.resolvedPath) {
     logger.info(`Discord RPC module path: ${rpcModuleInfo.resolvedPath}`);
-    
+
     if (!rpcModuleInfo.isLocal) {
-      logger.warn('⚠️  WARNING: discord-rpc is resolving from outside the project!');
+      logger.warn('WARNING: discord-rpc is resolving from outside the project');
       logger.warn('Consider installing it locally: npm install discord-rpc');
     }
   }
-  
+
   logger.info(`Discord RPC connected: ${rpcConnected ? 'yes' : 'no'}`);
   logger.info(`Voice adapter mode: ${adapterMode}`);
   logger.info(`Selected voice channel available: ${voiceStatus.available ? 'yes' : 'no'}`);
@@ -101,22 +98,35 @@ async function logStartupDiagnostics(): Promise<void> {
 
 export async function bootstrap(): Promise<void> {
   const config = loadConfig();
+  const dataSource = process.env.CS2_CLUTCH_DATA_SOURCE === 'overwolf' ? 'overwolf' : 'gsi';
   logger.info('Configuration loaded');
 
-  const gsiSetupResult = ensureCs2GsiConfig(config.gsi);
-  if (!gsiSetupResult.foundInstall) {
-    logger.warn('CS2 installation not found for automatic GSI setup');
-    stateStore.pushEvent('system', 'warn', 'GSI_AUTO_SETUP_SKIPPED', 'CS2 installation not found for automatic GSI setup');
-  } else if (gsiSetupResult.created.length > 0 || gsiSetupResult.updated.length > 0) {
-    const createdCount = gsiSetupResult.created.length;
-    const updatedCount = gsiSetupResult.updated.length;
-    stateStore.pushEvent('system', 'info', 'GSI_AUTO_SETUP_OK', `Automatic CS2 GSI setup complete (${createdCount} created, ${updatedCount} updated)`);
-  } else if (gsiSetupResult.unchanged.length > 0) {
-    stateStore.pushEvent('system', 'info', 'GSI_AUTO_SETUP_OK', 'Automatic CS2 GSI setup already up to date');
-  }
+  stateStore.updateGameState({
+    dataSource,
+    dataSourceStatus: dataSource === 'overwolf'
+      ? 'Waiting for Overwolf GEP data from Counter-Strike 2'
+      : 'Waiting for CS2 GSI data',
+  } as any);
 
-  if (gsiSetupResult.errors.length > 0) {
-    stateStore.pushEvent('error', 'error', 'GSI_AUTO_SETUP_FAIL', `Automatic CS2 GSI setup failed for ${gsiSetupResult.errors.length} location(s)`);
+  if (dataSource === 'overwolf') {
+    logger.info('Running with Overwolf as the live game data source');
+    stateStore.pushEvent('system', 'info', 'OVERWOLF_MODE', 'Using Overwolf GEP as the live game data source');
+  } else {
+    const gsiSetupResult = ensureCs2GsiConfig(config.gsi);
+    if (!gsiSetupResult.foundInstall) {
+      logger.warn('CS2 installation not found for automatic GSI setup');
+      stateStore.pushEvent('system', 'warn', 'GSI_AUTO_SETUP_SKIPPED', 'CS2 installation not found for automatic GSI setup');
+    } else if (gsiSetupResult.created.length > 0 || gsiSetupResult.updated.length > 0) {
+      const createdCount = gsiSetupResult.created.length;
+      const updatedCount = gsiSetupResult.updated.length;
+      stateStore.pushEvent('system', 'info', 'GSI_AUTO_SETUP_OK', `Automatic CS2 GSI setup complete (${createdCount} created, ${updatedCount} updated)`);
+    } else if (gsiSetupResult.unchanged.length > 0) {
+      stateStore.pushEvent('system', 'info', 'GSI_AUTO_SETUP_OK', 'Automatic CS2 GSI setup already up to date');
+    }
+
+    if (gsiSetupResult.errors.length > 0) {
+      stateStore.pushEvent('error', 'error', 'GSI_AUTO_SETUP_FAIL', `Automatic CS2 GSI setup failed for ${gsiSetupResult.errors.length} location(s)`);
+    }
   }
 
   const clutchEngine = new ClutchEngine(config);
@@ -127,38 +137,30 @@ export async function bootstrap(): Promise<void> {
 
   initializeVoiceAdapter();
 
-  // Register action handlers
   const discordVoiceAction = new DiscordVoiceActionHandler(config);
   actionHandlerRegistry.register(discordVoiceAction);
 
   const discordPresenceAction = new DiscordPresenceActionHandler();
   actionHandlerRegistry.register(discordPresenceAction);
 
-  // Initialize all action handlers
   await actionHandlerRegistry.initializeAll();
-
   await logStartupDiagnostics();
 
   const app = await startGsiServer(config.gsi, clutchEngine);
-  logger.info('GSI server started on %s:%d%s', config.gsi.host, config.gsi.port, config.gsi.endpoint);
+  logger.info('Game data server started on %s:%d%s', config.gsi.host, config.gsi.port, config.gsi.endpoint);
 
-  // Track mock mode in state store
   stateStore.mockMode = isMockMode();
 
-  // Serve the UI static files
   const uiPublicPath = path.resolve(process.cwd(), 'src', 'ui', 'public');
   app.use('/ui', express.static(uiPublicPath));
 
-  // Mount API routes and SSE
   mountApiRoutes(app, config, clutchEngine);
   mountSseEndpoint(app);
 
-  // Serve overlay page at /overlay
   app.get('/overlay', (_req, res) => {
     res.sendFile(path.resolve(uiPublicPath, 'overlay.html'));
   });
 
-  // Redirect root to dashboard
   app.get('/', (_req, res) => {
     res.redirect('/ui');
   });
@@ -166,6 +168,5 @@ export async function bootstrap(): Promise<void> {
   logger.info('Dashboard UI available at http://%s:%d/ui', config.gsi.host, config.gsi.port);
   logger.info('Overlay available at http://%s:%d/overlay', config.gsi.host, config.gsi.port);
 
-  // Push startup event for UI
   stateStore.pushEvent('system', 'info', 'APP_STARTED', 'CS2 Clutch Mode application started');
 }

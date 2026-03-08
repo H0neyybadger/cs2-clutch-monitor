@@ -20,7 +20,10 @@
     "electron:prebuild": "npm run clean && npm run build:ts",
     "electron:build": "npm run electron:prebuild && electron-builder --win --config electron-builder.json",
     "electron:pack": "npm run electron:prebuild && electron-builder --win --dir --config electron-builder.json",
-    "electron:dist": "npm run electron:build"
+    "electron:dist": "npm run electron:build",
+    "ow:start": "ow-electron .",
+    "ow:dev": "npm run build:ts && ow-electron .",
+    "ow:build": "npm run build:ts && ow-electron-builder --publish=never"
   },
   "keywords": [
     "cs2",
@@ -30,18 +33,23 @@
     "voice",
     "clutch"
   ],
-  "author": "",
+  "author": {
+    "name": "Strife"
+  },
   "license": "MIT",
   "dependencies": {
     "body-parser": "^1.20.2",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "smart-buffer": "^4.2.0",
     "zod": "^3.22.4"
   },
   "optionalDependencies": {
     "discord-rpc": "^4.0.1"
   },
   "devDependencies": {
+    "@overwolf/ow-electron": "^39.6.0",
+    "@overwolf/ow-electron-builder": "^26.0.12",
     "@types/body-parser": "^1.19.5",
     "@types/discord-rpc": "^4.0.8",
     "@types/express": "^4.17.21",
@@ -51,5 +59,56 @@
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "productName": "CS2 Clutch Mode",
+  "overwolf": {
+    "packages": [
+      "gep",
+      "overlay"
+    ]
+  },
+  "build": {
+    "nodeGypRebuild": false,
+    "appId": "com.strife.cs2clutchmode.overwolf",
+    "asar": false,
+    "overwolf": {
+      "disableAdOptimization": false
+    },
+    "productName": "CS2 Clutch Mode",
+    "directories": {
+      "output": "dist-overwolf"
+    },
+    "files": [
+      "src/**/*",
+      "dist/**/*",
+      "config/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!src/testing/**",
+      "!dist/testing/**",
+      "!dist/electron/**",
+      "!**/*.ts",
+      "!**/*.d.ts",
+      "!**/*.ts.map",
+      "!**/*.d.ts.map",
+      "!**/*.js.map",
+      "!**/tsconfig.json"
+    ],
+    "copyright": "Copyright 2026 Strife",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "CS2-Clutch-Mode-Overwolf-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

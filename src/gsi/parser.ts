@@ -35,7 +35,7 @@ const TeamSchema = z.object({
 });
 
 const RoundSchema = z.object({
-  phase: z.enum(['live', 'freezetime', 'over']).optional(),
+  phase: z.string().optional(),
   win_team: z.enum(['CT', 'T']).optional(),
   bomb: z.enum(['planted', 'exploded', 'defused']).optional(),
 });
@@ -57,7 +57,7 @@ const GsiPayloadSchema = z.object({
   map: z.object({
     mode: z.string().optional(),
     name: z.string().optional(),
-    phase: z.enum(['warmup', 'live', 'intermission', 'gameover']).optional(),
+    phase: z.string().optional(),
     round: z.number().optional(),
     num_matches_to_win_series: z.number().optional(),
     current_spectators: z.number().optional(),
@@ -68,6 +68,76 @@ const GsiPayloadSchema = z.object({
   added: z.any().optional(),
 });
 
+let previousGameState: Partial<GameState> = {};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function deepMerge<T>(previous: T | undefined, current: T | undefined): T | undefined {
+  if (current === undefined) {
+    return previous;
+  }
+
+  if (previous === undefined) {
+    return current;
+  }
+
+  if (!isPlainObject(previous) || !isPlainObject(current)) {
+    return current;
+  }
+
+  const merged: Record<string, unknown> = { ...previous };
+  for (const [key, value] of Object.entries(current)) {
+    const previousValue = merged[key];
+    merged[key] = isPlainObject(previousValue) && isPlainObject(value)
+      ? deepMerge(previousValue, value)
+      : value;
+  }
+
+  return merged as T;
+}
+
+function mergeAllPlayers(
+  previous: Record<string, z.infer<typeof PlayerSchema>> | undefined,
+  current: Record<string, z.infer<typeof PlayerSchema>> | undefined
+): Record<string, z.infer<typeof PlayerSchema>> | undefined {
+  if (!current) {
+    return previous;
+  }
+
+  if (!previous) {
+    return current;
+  }
+
+  const merged: Record<string, z.infer<typeof PlayerSchema>> = { ...previous };
+  for (const [steamId, player] of Object.entries(current)) {
+    merged[steamId] = deepMerge(previous[steamId], player) ?? player;
+  }
+
+  return merged;
+}
+
+function shouldResetMergeCache(previous: Partial<GameState>, current: Partial<GameState>): boolean {
+  const previousSteamId = previous.provider?.steamid;
+  const currentSteamId = current.provider?.steamid;
+  if (previousSteamId && currentSteamId && previousSteamId !== currentSteamId) {
+    return true;
+  }
+
+  const previousMap = previous.map?.name;
+  const currentMap = current.map?.name;
+  if (previousMap && currentMap && previousMap !== currentMap) {
+    return true;
+  }
+
+  return false;
+}
+
+export function resetParsedGameStateCache(): void {
+  previousGameState = {};
+}
+
 export function parseGsiPayload(payload: unknown): GameState {
   const parsed = GsiPayloadSchema.safeParse(payload);
 
@@ -76,14 +146,37 @@ export function parseGsiPayload(payload: unknown): GameState {
   }
 
   const data = parsed.data;
-
-  return {
+  const partialState: Partial<GameState> = {
     provider: data.provider,
     player: data.player,
     team: data.team,
     round: data.round,
     map: data.map,
     allPlayers: data.allplayers,
+  };
+
+  if (shouldResetMergeCache(previousGameState, partialState)) {
+    previousGameState = {};
+  }
+
+  const mergedState: GameState = {
+    provider: deepMerge(previousGameState.provider, partialState.provider),
+    player: deepMerge(previousGameState.player, partialState.player),
+    team: deepMerge(previousGameState.team, partialState.team),
+    round: deepMerge(previousGameState.round, partialState.round),
+    map: deepMerge(previousGameState.map, partialState.map),
+    allPlayers: mergeAllPlayers(previousGameState.allPlayers, partialState.allPlayers),
     raw: payload,
   };
+
+  previousGameState = {
+    provider: mergedState.provider,
+    player: mergedState.player,
+    team: mergedState.team,
+    round: mergedState.round,
+    map: mergedState.map,
+    allPlayers: mergedState.allPlayers,
+  };
+
+  return mergedState;
 }

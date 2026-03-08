@@ -190,16 +190,16 @@ async function refreshAll() {
       api('GET', '/api/stats'),
     ]);
 
-    if (statusRes) updateStatus(statusRes);
-    if (presenceRes) updatePresence(presenceRes);
-    if (gameStateRes) updateGameState(gameStateRes);
-    if (eventsRes && eventsRes.events) {
-      events = eventsRes.events;
+    if (statusRes.ok) updateStatus(statusRes.data);
+    if (presenceRes.ok) updatePresence(presenceRes.data);
+    if (gameStateRes.ok) updateGameState(gameStateRes.data);
+    if (eventsRes.ok && Array.isArray(eventsRes.data)) {
+      events = eventsRes.data;
       renderEventLog();
     }
-    if (diagRes) renderDiagnostics(diagRes);
-    if (settingsRes) renderSettings(settingsRes);
-    if (statsRes) updateGsiStats(statsRes.data);
+    if (diagRes.ok) renderDiagnostics(diagRes.data);
+    if (settingsRes.ok) renderSettings(settingsRes.data);
+    if (statsRes.ok) updateGsiStats(statsRes.data);
 
   } catch (err) {
     console.error('Error refreshing all:', err);
@@ -425,7 +425,6 @@ function updateClutchStatus(data) {
     
     scenarioDisplay.innerHTML = `<div class="scenario-text active">${scenario}</div>`;
     
-    // Determine threat level
     let threat = 'Unknown';
     let threatClass = '';
     if (enemyCount === 1) {
@@ -451,19 +450,21 @@ function updateClutchStatus(data) {
     badge.className = 'card-badge badge-inactive';
     card.classList.remove('clutch-active');
     
-    scenarioDisplay.innerHTML = `<div class="scenario-text">Waiting for clutch...</div>`;
+    const waitingReason = lastGameState.clutchEligibilityReason && lastGameState.clutchEligibilityReason !== 'Waiting for game data'
+      ? `<div class="empty-state-hint" style="margin-top:10px">${escHtml(lastGameState.clutchEligibilityReason)}</div>`
+      : '';
+    scenarioDisplay.innerHTML = `<div class="scenario-text">Waiting for clutch...</div>${waitingReason}`;
     threatLevel.innerHTML = `
       <span class="threat-label">Threat Level:</span>
-      <span class="threat-value">—</span>
+      <span class="threat-value">-</span>
     `;
   }
   
-  // Update clutch stats
-  document.getElementById('clutch-round-timer').textContent = lastGameState.roundTimeRemaining 
-    ? formatRoundTime(lastGameState.roundTimeRemaining) 
-    : '—';
-  document.getElementById('clutch-team-alive').textContent = lastGameState.teamAliveCount ?? '—';
-  document.getElementById('clutch-enemy-alive').textContent = lastGameState.enemyAliveCount ?? '—';
+  document.getElementById('clutch-round-timer').textContent = lastGameState.roundTimeRemaining != null
+    ? formatRoundTime(lastGameState.roundTimeRemaining)
+    : '-';
+  document.getElementById('clutch-team-alive').textContent = lastGameState.teamAliveCount ?? '-';
+  document.getElementById('clutch-enemy-alive').textContent = lastGameState.enemyAliveCount ?? '-';
 }
 
 // ============ UPDATE LIVE MATCH PANEL ============
@@ -474,7 +475,6 @@ function updateLiveMatch(data) {
   if (!data.lastPayloadTime) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">🎮</div>
         <div class="empty-state-text">Waiting for match data...</div>
       </div>`;
     badge.textContent = 'No Data';
@@ -485,6 +485,10 @@ function updateLiveMatch(data) {
   const isRecent = data.lastPayloadTime && (Date.now() - data.lastPayloadTime) < 30000;
   badge.textContent = isRecent ? 'Live' : 'Stale';
   badge.className = 'card-badge ' + (isRecent ? 'badge-healthy' : 'badge-warning');
+
+  const rosterNote = data.rosterAvailable
+    ? ''
+    : `<div class="empty-state-hint" style="margin-top:10px">${escHtml(data.rosterStatus || 'Roster data unavailable from CS2.')}</div>`;
 
   container.innerHTML = `
     <div class="match-grid">
@@ -506,11 +510,11 @@ function updateLiveMatch(data) {
       </div>
       <div class="match-item">
         <span class="match-label">Team Alive</span>
-        <span class="match-value ${data.teamAliveCount === 1 ? 'orange' : ''}">${data.teamAliveCount ?? '?'}</span>
+        <span class="match-value ${data.teamAliveCount === 1 ? 'orange' : ''}">${data.teamAliveCount ?? '-'}</span>
       </div>
       <div class="match-item">
         <span class="match-label">Enemy Alive</span>
-        <span class="match-value ${data.enemyAliveCount > 0 ? 'orange' : ''}">${data.enemyAliveCount ?? '?'}</span>
+        <span class="match-value ${data.enemyAliveCount > 0 ? 'orange' : ''}">${data.enemyAliveCount ?? '-'}</span>
       </div>
       <div class="match-item">
         <span class="match-label">Player Status</span>
@@ -521,6 +525,7 @@ function updateLiveMatch(data) {
         <span class="match-value">${formatTime(data.lastPayloadTime)}</span>
       </div>
     </div>
+    ${rosterNote}
   `;
 }
 
@@ -626,8 +631,8 @@ function renderClutchTimeline() {
 // ============ UPDATE DETECTION HEALTH ============
 function updateDetectionHealth(data) {
   const badge = document.getElementById('detection-health-badge');
+  const sourceLabel = data.gameDataSource === 'overwolf' ? 'Overwolf' : 'GSI';
   
-  // Determine overall health
   let health = 'High';
   let healthClass = 'badge-healthy';
   
@@ -638,12 +643,16 @@ function updateDetectionHealth(data) {
     health = 'Low';
     healthClass = 'badge-error';
   }
+
+  if (data.gsiActive && (!data.gsiRosterAvailable || !data.gsiPlayerStatsAvailable)) {
+    health = 'Medium';
+    healthClass = 'badge-warning';
+  }
   
   badge.textContent = health;
   badge.className = `card-badge ${healthClass}`;
   
-  // Update health items
-  document.getElementById('health-gsi').textContent = data.gsiActive ? 'Active' : 'Inactive';
+  document.getElementById('health-gsi').textContent = data.gsiActive ? `${sourceLabel} Active` : `${sourceLabel} Inactive`;
   document.getElementById('health-gsi-icon').className = 'health-icon ' + (data.gsiActive ? 'green' : 'red');
   
   const feedStatus = data.gsiActive ? 'Fresh' : data.lastGameStateTime > 0 ? 'Stale' : 'No Data';
@@ -656,9 +665,14 @@ function updateDetectionHealth(data) {
   document.getElementById('health-latency-icon').className = 'health-icon ' + 
     (data.gsiActive ? 'green' : 'orange');
   
-  document.getElementById('health-confidence').textContent = health;
+  const confidence = data.gsiActive && data.gsiRosterAvailable && data.gsiPlayerStatsAvailable
+    ? 'High'
+    : data.gsiActive
+      ? 'Medium'
+      : 'Low';
+  document.getElementById('health-confidence').textContent = confidence;
   document.getElementById('health-confidence-icon').className = 'health-icon ' + 
-    (health === 'High' ? 'green' : health === 'Medium' ? 'orange' : 'red');
+    (confidence === 'High' ? 'green' : confidence === 'Medium' ? 'orange' : 'red');
 }
 
 // ============ UPDATE OVERLAY CONTROLS ============
@@ -865,35 +879,58 @@ function clearClutchHistory() {
 function updateGsiStats(stats) {
   gsiStats = stats;
   
-  // Update Match Stats panel
-  document.getElementById('gsi-kills').textContent = stats.kills;
-  document.getElementById('gsi-deaths').textContent = stats.deaths;
-  document.getElementById('gsi-assists').textContent = stats.assists;
+  const hasMatchStats = Boolean(stats.matchStatsAvailable);
+  const kills = stats.kills;
+  const deaths = stats.deaths;
+  const assists = stats.assists;
+
+  document.getElementById('gsi-kills').textContent = hasMatchStats && kills != null ? String(kills) : '-';
+  document.getElementById('gsi-deaths').textContent = hasMatchStats && deaths != null ? String(deaths) : '-';
+  document.getElementById('gsi-assists').textContent = hasMatchStats && assists != null ? String(assists) : '-';
   document.getElementById('gsi-rounds').textContent = stats.roundsPlayed;
   document.getElementById('gsi-rounds-won').textContent = stats.roundsWon;
   
-  // Calculate K/D ratio
-  const kd = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(2);
+  const kd = hasMatchStats && kills != null
+    ? (deaths && deaths > 0 ? (kills / deaths).toFixed(2) : Number(kills).toFixed(2))
+    : '-';
   document.getElementById('gsi-kd').textContent = kd;
   
-  // Update Clutch Performance panel
   document.getElementById('gsi-clutch-attempts').textContent = stats.clutchAttempts;
   document.getElementById('gsi-clutches-won').textContent = stats.clutchesWon;
-  document.getElementById('gsi-highest-clutch').textContent = stats.highestClutch ? `1v${stats.highestClutch}` : '—';
+  document.getElementById('gsi-highest-clutch').textContent = stats.highestClutch ? `1v${stats.highestClutch}` : '-';
   
-  // Calculate clutch win rate
   const clutchWinRate = stats.clutchAttempts > 0 
     ? Math.round((stats.clutchesWon / stats.clutchAttempts) * 100) 
     : 0;
-  document.getElementById('gsi-clutch-winrate').textContent = stats.clutchAttempts > 0 ? `${clutchWinRate}%` : '—';
+  document.getElementById('gsi-clutch-winrate').textContent = stats.clutchAttempts > 0 ? `${clutchWinRate}%` : '-';
+
+  let matchStatsNote = document.getElementById('match-stats-note');
+  if (!matchStatsNote) {
+    matchStatsNote = document.createElement('div');
+    matchStatsNote.id = 'match-stats-note';
+    matchStatsNote.className = 'empty-state-hint';
+    matchStatsNote.style.marginTop = '8px';
+    document.getElementById('gsi-stats-content')?.appendChild(matchStatsNote);
+  }
+  matchStatsNote.textContent = stats.matchStatsStatus || 'Waiting for player match stats from CS2.';
+
+  let clutchDataNote = document.getElementById('clutch-data-note');
+  if (!clutchDataNote) {
+    clutchDataNote = document.createElement('div');
+    clutchDataNote.id = 'clutch-data-note';
+    clutchDataNote.className = 'empty-state-hint';
+    clutchDataNote.style.marginTop = '8px';
+    document.getElementById('clutch-perf-content')?.appendChild(clutchDataNote);
+  }
+  clutchDataNote.textContent = lastGameState.rosterStatus || 'Waiting for roster data from CS2.';
 }
 
 // ============ RESET STATS ============
 async function resetStats() {
   try {
     const res = await api('POST', '/api/stats/reset');
-    if (res && res.stats) {
-      updateGsiStats(res.stats);
+    if (res && res.data && res.data.stats) {
+      updateGsiStats(res.data.stats);
       toast('Session stats reset', 'success');
     }
   } catch (err) {
@@ -983,7 +1020,6 @@ function renderDiagnostics(data) {
   const container = document.getElementById('diagnostics-content');
   const badge = document.getElementById('diag-badge');
 
-  // Determine health
   let health = 'healthy';
   if (data.recentErrors && data.recentErrors.length > 0) health = 'warning';
   if (!data.discordConnected && !data.mockMode) health = 'error';
@@ -993,9 +1029,15 @@ function renderDiagnostics(data) {
 
   const items = [
     { label: 'Discord RPC', value: data.discordConnected ? 'Connected' : (data.mockMode ? 'Mock Mode' : 'Disconnected'), icon: data.discordConnected ? 'ok' : (data.mockMode ? 'warn' : 'err') },
-    { label: 'GSI Listening', value: data.gsiListening ? 'Yes' : 'No', icon: data.gsiListening ? 'ok' : 'err' },
+    { label: 'Data Source', value: data.dataSource === 'overwolf' ? 'Overwolf GEP' : 'CS2 GSI', icon: 'neutral' },
+    { label: 'Feed Status', value: data.dataSourceStatus || '-', icon: data.dataSource === 'overwolf' ? 'ok' : (data.gsiListening ? 'ok' : 'warn') },
     { label: 'GSI Endpoint', value: `${data.gsiEndpoint || '?'} (port ${data.gsiPort || '?'})`, icon: 'neutral' },
-    { label: 'Client ID', value: data.clientIdMasked || '—', icon: 'neutral' },
+    { label: 'Player Match Stats', value: data.playerStatsStatus || '-', icon: data.playerStatsAvailable ? 'ok' : 'warn' },
+    { label: 'Roster Data', value: data.rosterStatus || '-', icon: data.rosterAvailable ? 'ok' : 'warn' },
+    { label: 'Clutch Detection', value: data.clutchEligibilityReason || '-', icon: data.rosterAvailable ? 'ok' : 'warn' },
+    { label: 'Overwolf Trace', value: data.overwolfTraceEnabled ? 'Enabled' : 'Disabled', icon: data.overwolfTraceEnabled ? 'ok' : 'neutral' },
+    { label: 'Trace Path', value: data.overwolfTracePath || '-', icon: 'neutral' },
+    { label: 'Client ID', value: data.clientIdMasked || '-', icon: 'neutral' },
     { label: 'Last Discord Ready', value: data.lastDiscordReadyTime ? formatTime(data.lastDiscordReadyTime) : 'Never', icon: data.lastDiscordReadyTime ? 'ok' : 'neutral' },
     { label: 'Last setActivity OK', value: data.lastSetActivitySuccessTime ? formatTime(data.lastSetActivitySuccessTime) : 'Never', icon: data.lastSetActivitySuccessTime ? 'ok' : 'neutral' },
     { label: 'Last setActivity Fail', value: data.lastSetActivityFailTime ? formatTime(data.lastSetActivityFailTime) : 'Never', icon: data.lastSetActivityFailTime ? 'err' : 'neutral' },
@@ -1013,7 +1055,6 @@ function renderDiagnostics(data) {
     </div>
   `).join('');
 
-  // Append recent errors if any
   if (data.recentErrors && data.recentErrors.length > 0) {
     container.innerHTML += `
       <div style="margin-top:12px">
