@@ -22,6 +22,9 @@ export interface PresenceSnapshot {
   lastError: string | null;
 }
 
+// --- Data validation status ---
+export type DataStatus = 'stale' | 'pending' | 'confirmed';
+
 // --- Normalized game state for UI ---
 export interface UIGameState {
   playerAlive: boolean;
@@ -33,6 +36,9 @@ export interface UIGameState {
   mapName: string;
   roundNumber: number;
   lastPayloadTime: number | null;
+  dataStatus: DataStatus;
+  lastRecalculationTime: number | null;
+  currentRoundId: number;
 }
 
 // --- Diagnostics for UI ---
@@ -104,6 +110,9 @@ class StateStore {
     mapName: '?',
     roundNumber: 0,
     lastPayloadTime: null,
+    dataStatus: 'pending',
+    lastRecalculationTime: null,
+    currentRoundId: 0,
   };
   private _diagnostics: Diagnostics = {
     lastDiscordReadyTime: null,
@@ -131,6 +140,8 @@ class StateStore {
   };
   private _lastRoundNumber: number = 0;
   private _lastPlayerStats: { kills: number; deaths: number; assists: number } | null = null;
+  private _lastKnownPhase: string = '?';
+  private _roundTransitionDetected: boolean = false;
 
   // ============ Original getters/setters (preserved) ============
 
@@ -188,6 +199,64 @@ class StateStore {
     this.data.clutchActive = false;
     this.data.originalVolumes.clear();
     this.data.lastGameStateTime = 0;
+  }
+
+  /**
+   * Detect and handle round transitions
+   * Resets alive counts to pending state when entering freeze time of new round
+   */
+  handleRoundTransition(newRoundNumber: number, newPhase: string): void {
+    const roundChanged = newRoundNumber > this._lastRoundNumber && this._lastRoundNumber > 0;
+    const phaseChanged = newPhase !== this._lastKnownPhase;
+
+    // Round transition detected
+    if (roundChanged) {
+      console.log(`[ROUND TRANSITION] Round ${this._lastRoundNumber} → ${newRoundNumber}`);
+      this._gameState.currentRoundId = newRoundNumber;
+      this._roundTransitionDetected = true;
+      
+      // Mark data as stale when entering new round
+      this._gameState.dataStatus = 'stale';
+      this._gameState.teamAliveCount = 0;
+      this._gameState.enemyAliveCount = 0;
+      this._gameState.playerAlive = false;
+      
+      console.log('[ROUND TRANSITION] Alive counts reset to 0 (stale data from previous round)');
+      this._broadcast('gameState', this._gameState);
+    }
+
+    // Phase transition within same round
+    if (phaseChanged && !roundChanged) {
+      console.log(`[PHASE TRANSITION] ${this._lastKnownPhase} → ${newPhase} (Round ${newRoundNumber})`);
+      
+      // Entering freeze time - mark as pending
+      if (newPhase === 'freezetime') {
+        this._gameState.dataStatus = 'pending';
+        console.log('[PHASE TRANSITION] Entering freeze time - data marked as pending');
+      }
+      
+      // Entering live phase - data will be confirmed when counts are recalculated
+      if (newPhase === 'live') {
+        console.log('[PHASE TRANSITION] Entering live phase - awaiting count confirmation');
+      }
+    }
+
+    this._lastKnownPhase = newPhase;
+  }
+
+  /**
+   * Confirm current round data as valid
+   * Called after alive counts are recalculated during live phase
+   */
+  confirmRoundData(): void {
+    if (this._gameState.roundPhase === 'live') {
+      this._gameState.dataStatus = 'confirmed';
+      this._gameState.lastRecalculationTime = Date.now();
+      console.log('[ROUND DATA] Counts confirmed for live round', this._gameState.roundNumber);
+    } else if (this._gameState.roundPhase === 'freezetime') {
+      this._gameState.dataStatus = 'pending';
+      console.log('[ROUND DATA] Counts marked as pending (freeze time)');
+    }
   }
 
   // ============ Session Stats ============

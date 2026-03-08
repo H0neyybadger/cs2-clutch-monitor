@@ -22,33 +22,52 @@ export async function startGsiServer(
       const payload = req.body;
       const gameState = parseGsiPayload(payload);
 
+      // Extract round info for transition detection
+      const newRoundNumber = gameState.map?.round || 0;
+      const newPhase = gameState.round?.phase || '?';
+      
+      // Handle round transitions BEFORE processing game state
+      if (newRoundNumber > 0 && newPhase !== '?') {
+        stateStore.handleRoundTransition(newRoundNumber, newPhase);
+      }
+
+      // Process game state through clutch engine
       clutchEngine.processGameState(gameState);
 
-      // Update UI game state snapshot — merge-on-update to preserve last-known-good values
-      // Only overwrite fields that have real values in this payload
+      // Update UI game state snapshot
       const partial: Record<string, any> = { lastPayloadTime: Date.now() };
 
       const player = gameState.player;
       const allPlayers = gameState.allPlayers;
 
+      // Update basic player info
       if (player) {
-        partial.playerAlive = isPlayerAlive(player);
         if (player.team) partial.playerTeam = player.team;
       }
 
-      const playerTeam = player?.team || stateStore.gameState.playerTeam;
-      if (playerTeam && playerTeam !== '?' && allPlayers) {
-        const enemyTeam = getEnemyTeam(playerTeam);
-        partial.teamAliveCount = countAlivePlayers(allPlayers, playerTeam);
-        partial.enemyAliveCount = countAlivePlayers(allPlayers, enemyTeam);
-      }
-
+      // Update map/round info
       if (gameState.round?.phase) partial.roundPhase = gameState.round.phase;
       if (gameState.map?.phase) partial.mapPhase = gameState.map.phase;
       if (gameState.map?.name) partial.mapName = gameState.map.name;
-      if (gameState.map?.round != null && gameState.map.round > 0) partial.roundNumber = gameState.map.round;
+      if (newRoundNumber > 0) partial.roundNumber = newRoundNumber;
+
+      // Calculate alive counts and player status
+      const playerTeam = player?.team || stateStore.gameState.playerTeam;
+      if (player && allPlayers && playerTeam && playerTeam !== '?') {
+        const enemyTeam = getEnemyTeam(playerTeam);
+        
+        // Recalculate current round data
+        partial.playerAlive = isPlayerAlive(player);
+        partial.teamAliveCount = countAlivePlayers(allPlayers, playerTeam);
+        partial.enemyAliveCount = countAlivePlayers(allPlayers, enemyTeam);
+        
+        console.log(`[GSI] Recalculated counts: playerAlive=${partial.playerAlive} teamAlive=${partial.teamAliveCount} enemyAlive=${partial.enemyAliveCount} phase=${newPhase}`);
+      }
 
       stateStore.updateGameState(partial);
+      
+      // Confirm data status after update
+      stateStore.confirmRoundData();
 
       // Update session stats from GSI payload
       stateStore.updateSessionStats(payload);

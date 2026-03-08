@@ -39,25 +39,25 @@ export function shouldEnableClutch(gameState: GameState): boolean {
     return false;
   }
 
-  // Check 2: Player is alive
+  // Check 2: Round phase is live (must be live before checking counts)
+  const roundPhase = round?.phase || '?';
+  const isRoundLive = roundPhase === 'live';
+  if (!isRoundLive) {
+    console.log(`[CLUTCH DIAGNOSTIC] ❌ Round phase is "${roundPhase}" (not "live")`);
+    return false;
+  }
+
+  // Check 3: Player is alive
   const playerAlive = isPlayerAlive(player);
   if (!playerAlive) {
     console.log('[CLUTCH DIAGNOSTIC] ❌ Player is dead');
     return false;
   }
 
-  // Check 3: Player has a team
+  // Check 4: Player has a team
   const playerTeam = player.team;
   if (!playerTeam) {
     console.log('[CLUTCH DIAGNOSTIC] ❌ Player has no team');
-    return false;
-  }
-
-  // Check 4: Round phase is live
-  const roundPhase = round?.phase || '?';
-  const isRoundLive = roundPhase === 'live';
-  if (!isRoundLive) {
-    console.log(`[CLUTCH DIAGNOSTIC] ❌ Round phase is "${roundPhase}" (not "live")`);
     return false;
   }
 
