@@ -272,6 +272,98 @@ const PAYLOADS: Record<string, TestPayload> = {
       },
     },
   },
+  casual: {
+    name: 'Casual 10v10 - 1v4',
+    description: 'Casual alias mode with a 10v10-style roster, should trigger clutch when the player is last alive',
+    payload: {
+      provider: {
+        name: 'Counter-Strike: Global Offensive',
+        appid: 730,
+        version: 1,
+        steamid: '76561198000000000',
+        timestamp: Date.now(),
+      },
+      map: {
+        mode: 'casual10v10',
+        name: 'de_inferno',
+        phase: 'live',
+        round: 9,
+      },
+      round: {
+        phase: 'live',
+      },
+      player: {
+        steamid: '76561198000000000',
+        name: 'TestPlayer',
+        team: 'CT',
+        state: {
+          health: 48,
+          armor: 32,
+          helmet: true,
+        },
+      },
+      allplayers: {
+        '76561198000000000': { team: 'CT', state: { health: 48 } },
+        '76561198000000001': { team: 'CT', state: { health: 0 } },
+        '76561198000000002': { team: 'CT', state: { health: 0 } },
+        '76561198000000003': { team: 'CT', state: { health: 0 } },
+        '76561198000000004': { team: 'CT', state: { health: 0 } },
+        '76561198000000005': { team: 'CT', state: { health: 0 } },
+        '76561198000000006': { team: 'CT', state: { health: 0 } },
+        '76561198000000007': { team: 'CT', state: { health: 0 } },
+        '76561198000000008': { team: 'CT', state: { health: 0 } },
+        '76561198000000009': { team: 'CT', state: { health: 0 } },
+        '76561198000000010': { team: 'T', state: { health: 100 } },
+        '76561198000000011': { team: 'T', state: { health: 92 } },
+        '76561198000000012': { team: 'T', state: { health: 70 } },
+        '76561198000000013': { team: 'T', state: { health: 18 } },
+        '76561198000000014': { team: 'T', state: { health: 0 } },
+        '76561198000000015': { team: 'T', state: { health: 0 } },
+        '76561198000000016': { team: 'T', state: { health: 0 } },
+        '76561198000000017': { team: 'T', state: { health: 0 } },
+        '76561198000000018': { team: 'T', state: { health: 0 } },
+        '76561198000000019': { team: 'T', state: { health: 0 } },
+      },
+    },
+  },
+  wingman: {
+    name: 'Wingman 2v2 - 1v1',
+    description: 'Wingman alias mode with a 2v2 roster, should trigger clutch when the teammate is dead',
+    payload: {
+      provider: {
+        name: 'Counter-Strike: Global Offensive',
+        appid: 730,
+        version: 1,
+        steamid: '76561198000000000',
+        timestamp: Date.now(),
+      },
+      map: {
+        mode: 'scrimcomp2v2',
+        name: 'de_vertigo',
+        phase: 'live',
+        round: 6,
+      },
+      round: {
+        phase: 'live',
+      },
+      player: {
+        steamid: '76561198000000000',
+        name: 'TestPlayer',
+        team: 'T',
+        state: {
+          health: 61,
+          armor: 100,
+          helmet: true,
+        },
+      },
+      allplayers: {
+        '76561198000000000': { team: 'T', state: { health: 61 } },
+        '76561198000000001': { team: 'T', state: { health: 0 } },
+        '76561198000000010': { team: 'CT', state: { health: 44 } },
+        '76561198000000011': { team: 'CT', state: { health: 0 } },
+      },
+    },
+  },
 };
 
 function sendPayload(payload: unknown): Promise<void> {

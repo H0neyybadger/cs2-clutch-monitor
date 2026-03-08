@@ -22,7 +22,6 @@ const ROUND_BASED_MODES = [
   'scrimmage',
   'scrimcomp2v2',
   'gungame',
-  'gungameprogressive',
   'gungametrbomb',
 ];
 
@@ -33,9 +32,33 @@ const RESPAWN_MODES = [
   'deathmatch',
   'teamdeathmatch',
   'gungameprogressive',
+  'armsrace',
   'training',
   'custom',
 ];
+
+const ROUND_BASED_MODE_HINTS = [
+  'competitive',
+  'comp',
+  'premier',
+  'casual',
+  'wingman',
+  '2v2',
+  'scrim',
+  'gungametrbomb',
+];
+
+const RESPAWN_MODE_HINTS = [
+  'deathmatch',
+  'teamdeathmatch',
+  'gungameprogressive',
+  'armsrace',
+  'training',
+];
+
+function normalizeMode(mode: string): string {
+  return mode.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
 
 /**
  * Classify a game mode to determine if it supports clutch detection
@@ -45,12 +68,13 @@ export function classifyGameMode(mode: string | undefined): ModeClassification {
   if (!mode) {
     return {
       type: 'unknown',
-      supported: true, // Default to supported, rely on round-state logic
+      supported: true,
       reason: 'No mode provided - relying on round-state behavior',
     };
   }
 
   const modeLower = mode.toLowerCase();
+  const normalizedMode = normalizeMode(mode);
 
   // Check if it's a known round-based mode
   if (ROUND_BASED_MODES.includes(modeLower)) {
@@ -67,6 +91,22 @@ export function classifyGameMode(mode: string | undefined): ModeClassification {
       type: 'respawn',
       supported: false,
       reason: `Respawn mode not supported: ${mode}`,
+    };
+  }
+
+  if (RESPAWN_MODE_HINTS.some(hint => normalizedMode.includes(normalizeMode(hint)))) {
+    return {
+      type: 'respawn',
+      supported: false,
+      reason: `Respawn mode not supported: ${mode}`,
+    };
+  }
+
+  if (ROUND_BASED_MODE_HINTS.some(hint => normalizedMode.includes(normalizeMode(hint)))) {
+    return {
+      type: 'round-based',
+      supported: true,
+      reason: `Round-based mode: ${mode}`,
     };
   }
 

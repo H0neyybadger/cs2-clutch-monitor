@@ -57,8 +57,7 @@ async function getDiscordAudioSessions(): Promise<AudioSessionSnapshot[]> {
 
   const sessions = await listProcessAudioSessions('Discord');
   const seen = new Set<string>();
-
-  return sessions.filter(session => {
+  const dedupedSessions = sessions.filter(session => {
     const key = session.sessionKey || `${session.processId}:${session.displayName}`;
     if (seen.has(key)) {
       return false;
@@ -67,8 +66,69 @@ async function getDiscordAudioSessions(): Promise<AudioSessionSnapshot[]> {
     seen.add(key);
     return true;
   });
+
+  return selectPreferredDiscordAudioSessions(dedupedSessions);
 }
 
+function normalizeSessionText(session: AudioSessionSnapshot): string {
+  return [
+    session.displayName,
+    session.processName,
+    session.sessionIdentifier,
+    session.sessionInstanceIdentifier,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function isLikelyNotificationSession(session: AudioSessionSnapshot): boolean {
+  const text = normalizeSessionText(session);
+  return [
+    'notification',
+    'notify',
+    'message',
+    'ring',
+    'ringer',
+    'alert',
+    'call_sound',
+    'soundeffect',
+  ].some(keyword => text.includes(keyword));
+}
+
+function isLikelyVoiceSession(session: AudioSessionSnapshot): boolean {
+  const text = normalizeSessionText(session);
+  return [
+    'voice',
+    'voip',
+    'call',
+    'rtc',
+    'stream',
+  ].some(keyword => text.includes(keyword));
+}
+
+function selectPreferredDiscordAudioSessions(sessions: AudioSessionSnapshot[]): AudioSessionSnapshot[] {
+  if (sessions.length <= 1) {
+    return sessions;
+  }
+
+  const voiceSessions = sessions
+    .filter(session => !isLikelyNotificationSession(session))
+    .filter(isLikelyVoiceSession);
+
+  if (voiceSessions.length > 0) {
+    logger.info(`Selected ${voiceSessions.length} likely Discord voice session(s) from ${sessions.length} total session(s)`);
+    return voiceSessions;
+  }
+
+  const nonNotificationSessions = sessions.filter(session => !isLikelyNotificationSession(session));
+  if (nonNotificationSessions.length > 0 && nonNotificationSessions.length < sessions.length) {
+    logger.info(`Excluded ${sessions.length - nonNotificationSessions.length} likely Discord notification session(s)`);
+    return nonNotificationSessions;
+  }
+
+  return sessions;
+}
 function toVoiceChannelUsers(sessions: AudioSessionSnapshot[]): VoiceChannelUser[] {
   return sessions.map(session => ({
     id: session.sessionKey,
@@ -567,3 +627,4 @@ export function isClutchActive(): boolean {
 export function getOriginalVolumes(): Map<string, number> {
   return new Map(originalVolumes);
 }
+
