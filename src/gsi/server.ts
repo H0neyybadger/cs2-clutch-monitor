@@ -5,6 +5,7 @@ import { parseGsiPayload } from './parser';
 import { createLogger } from '../app/logger';
 import { stateStore } from '../app/state-store';
 import { countAlivePlayers, isPlayerAlive, getEnemyTeam } from './evaluator';
+import { classifyGameMode, isClutchEligible } from '../clutch/mode-classifier';
 import type { GsiConfig } from '../shared/types';
 
 const logger = createLogger('GSI-Server');
@@ -51,6 +52,17 @@ export async function startGsiServer(
       if (gameState.map?.name) partial.mapName = gameState.map.name;
       if (newRoundNumber > 0) partial.roundNumber = newRoundNumber;
 
+      // Track game mode and classification
+      const gameMode = gameState.map?.mode;
+      if (gameMode) {
+        partial.gameMode = gameMode;
+        const modeClassification = classifyGameMode(gameMode);
+        partial.modeSupported = modeClassification.supported;
+        partial.modeReason = modeClassification.reason;
+        
+        console.log(`[MODE] Game mode: ${gameMode} (${modeClassification.type}) - Supported: ${modeClassification.supported}`);
+      }
+
       // Calculate alive counts and player status
       const playerTeam = player?.team || stateStore.gameState.playerTeam;
       if (player && allPlayers && playerTeam && playerTeam !== '?') {
@@ -63,6 +75,11 @@ export async function startGsiServer(
         
         console.log(`[GSI] Recalculated counts: playerAlive=${partial.playerAlive} teamAlive=${partial.teamAliveCount} enemyAlive=${partial.enemyAliveCount} phase=${newPhase}`);
       }
+
+      // Calculate clutch eligibility
+      const eligibility = isClutchEligible(gameMode, newPhase);
+      partial.clutchEligible = eligibility.eligible;
+      partial.clutchEligibilityReason = eligibility.reason;
 
       stateStore.updateGameState(partial);
       

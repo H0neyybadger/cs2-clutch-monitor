@@ -39,6 +39,11 @@ export interface UIGameState {
   dataStatus: DataStatus;
   lastRecalculationTime: number | null;
   currentRoundId: number;
+  gameMode: string;
+  modeSupported: boolean;
+  modeReason: string;
+  clutchEligible: boolean;
+  clutchEligibilityReason: string;
 }
 
 // --- Diagnostics for UI ---
@@ -113,6 +118,11 @@ class StateStore {
     dataStatus: 'pending',
     lastRecalculationTime: null,
     currentRoundId: 0,
+    gameMode: '?',
+    modeSupported: true,
+    modeReason: 'Unknown mode',
+    clutchEligible: false,
+    clutchEligibilityReason: 'Waiting for game data',
   };
   private _diagnostics: Diagnostics = {
     lastDiscordReadyTime: null,
