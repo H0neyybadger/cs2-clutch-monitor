@@ -3,13 +3,16 @@ import { createLogger } from '../app/logger';
 import { getRpcClient, isConnected, isMockMode } from './rpc-client';
 import { channelCache } from './channel-cache';
 import type { VolumeMap, VoiceChannelUser, SelectedVoiceChannel } from './types';
+import { listProcessAudioSessions, setProcessAudioSessionVolumes } from '../windows/audio-session-controller';
+import type { AudioSessionSnapshot } from '../windows/audio-session-controller';
 
 const logger = createLogger('VoiceController');
 
 const originalVolumes: Map<string, number> = new Map();
 const currentVolumes: Map<string, number> = new Map();
+const originalSessions: Map<string, AudioSessionSnapshot> = new Map();
 let clutchActive = false;
-let adapterMode: 'mock' | 'discord-rpc' | 'unavailable' = 'unavailable';
+let adapterMode: 'mock' | 'windows-session' | 'discord-rpc' | 'unavailable' = 'unavailable';
 
 // Mock mode state
 const mockUsers: VoiceChannelUser[] = [
@@ -20,7 +23,10 @@ const mockUsers: VoiceChannelUser[] = [
 ];
 
 export function initializeVoiceAdapter(): void {
-  if (isMockMode()) {
+  if (process.platform === 'win32') {
+    adapterMode = 'windows-session';
+    logger.info('Voice adapter: Windows Discord session control active');
+  } else if (isMockMode()) {
     adapterMode = 'mock';
     logger.info('Voice adapter: mock mode');
   } else if (isConnected()) {
@@ -36,8 +42,63 @@ export function getAdapterMode(): string {
   return adapterMode;
 }
 
+function clampVolume(volume: number): number {
+  if (!Number.isFinite(volume)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(volume)));
+}
+
+async function getDiscordAudioSessions(): Promise<AudioSessionSnapshot[]> {
+  if (process.platform !== 'win32') {
+    return [];
+  }
+
+  const sessions = await listProcessAudioSessions('Discord');
+  const seen = new Set<string>();
+
+  return sessions.filter(session => {
+    const key = session.sessionKey || `${session.processId}:${session.displayName}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function toVoiceChannelUsers(sessions: AudioSessionSnapshot[]): VoiceChannelUser[] {
+  return sessions.map(session => ({
+    id: session.sessionKey,
+    username: session.displayName || session.processName || `Discord ${session.processId}`,
+    volume: currentVolumes.get(session.sessionKey) ?? clampVolume(session.volume),
+    mute: session.muted,
+  }));
+}
+
+async function fadeSessionVolumes(
+  sessionVolumes: Map<string, { session: AudioSessionSnapshot; from: number; to: number }>,
+  durationMs: number,
+  steps: number
+): Promise<void> {
+  if (sessionVolumes.size === 0) return;
+
+  const targetSessions = Array.from(sessionVolumes.values()).map(({ session, to }) => ({
+    ...session,
+    volume: clampVolume(to),
+  }));
+
+  await setProcessAudioSessionVolumes(targetSessions);
+
+  for (const session of targetSessions) {
+    currentVolumes.set(session.sessionKey, clampVolume(session.volume));
+  }
+}
+
 export async function lowerDiscordVolume(targetPercent: number): Promise<void> {
-  if (isMockMode() || !isConnected()) {
+  if (process.platform !== 'win32' && (isMockMode() || !isConnected())) {
     // Mock mode implementation
     logger.info(`Mock fading ${mockUsers.length} users to ${targetPercent}% over 250ms`);
     
@@ -53,55 +114,53 @@ export async function lowerDiscordVolume(targetPercent: number): Promise<void> {
     return;
   }
 
+  if (process.platform !== 'win32') {
+    logger.warn('Windows Discord session volume control is only available on Windows');
+    return;
+  }
+
   // Real Discord RPC adapter
   try {
     logger.info('=== Starting Discord Volume Lower Workflow ===');
-    logger.info('Step 1: Verifying Discord RPC connection');
+    logger.info('Step 1: Discovering Discord audio sessions');
     
-    if (!isConnected()) {
-      logger.error('⚠ Workflow failed: Discord RPC not connected');
-      return;
-    }
+    const sessions = await getDiscordAudioSessions();
     
-    logger.info('✓ Discord RPC connected');
-    logger.info('Step 2: Fetching voice channel users');
-    
-    const users = await fetchVoiceChannelUsers();
-    
-    if (users.length === 0) {
-      logger.warn('⚠ Workflow stopped: No voice channel users found');
-      logger.warn('  - Ensure you are in a Discord voice channel');
-      logger.warn('  - Ensure other users are in the same channel');
+    if (sessions.length === 0) {
+      logger.warn('⚠ Workflow stopped: No Discord audio sessions found');
+      logger.warn('  - Ensure the Discord desktop app is running');
+      logger.warn('  - Ensure Discord audio is active on this PC');
       return;
     }
 
-    logger.info(`✓ Fetched ${users.length} voice channel users`);
+    logger.info(`✓ Fetched ${sessions.length} Discord audio sessions`);
     logger.info('Step 3: Storing original volumes');
 
     clutchActive = true;
 
     // Store original volumes before changing
-    for (const user of users) {
-      if (!originalVolumes.has(user.id)) {
-        originalVolumes.set(user.id, user.volume);
-        logger.debug(`  Stored ${user.username}: ${user.volume}%`);
+    for (const session of sessions) {
+      if (!originalVolumes.has(session.sessionKey)) {
+        originalVolumes.set(session.sessionKey, clampVolume(session.volume));
+        originalSessions.set(session.sessionKey, session);
+        logger.debug(`  Stored ${session.displayName || session.processName}: ${clampVolume(session.volume)}%`);
       }
     }
 
     logger.info(`✓ Stored ${originalVolumes.size} original volumes`);
-    logger.info(`Step 4: Fading ${users.length} users to ${targetPercent}% over 250ms`);
+    logger.info(`Step 4: Fading ${sessions.length} Discord audio sessions to ${targetPercent}% over 250ms`);
 
     // Build fade map: userId -> {from, to}
-    const fadeMap = new Map<string, { from: number; to: number }>();
-    for (const user of users) {
-      const fromVolume = currentVolumes.get(user.id) ?? user.volume;
-      fadeMap.set(user.id, { from: fromVolume, to: targetPercent });
+    const fadeMap = new Map<string, { session: AudioSessionSnapshot; from: number; to: number }>();
+    for (const session of sessions) {
+      const fromVolume = currentVolumes.get(session.sessionKey) ?? clampVolume(session.volume);
+      fadeMap.set(session.sessionKey, { session, from: fromVolume, to: clampVolume(targetPercent) });
     }
 
     // Fade all users in parallel over 250ms with 4 steps
-    await fadeUserVolumes(fadeMap, 250, 4);
+    await fadeSessionVolumes(fadeMap, 250, 4);
 
-    logger.info(`✓ Successfully faded ${users.length} users to ${targetPercent}%`);
+    logger.info(`✓ Successfully faded ${sessions.length} Discord audio sessions to ${targetPercent}%`);
     logger.info('=== Discord Volume Lower Workflow Complete ===');
   } catch (error: any) {
     logger.error('⚠ Discord volume lower workflow failed');
@@ -111,7 +170,7 @@ export async function lowerDiscordVolume(targetPercent: number): Promise<void> {
 }
 
 export async function restoreDiscordVolume(): Promise<void> {
-  if (isMockMode() || !isConnected()) {
+  if (process.platform !== 'win32' && (isMockMode() || !isConnected())) {
     // Mock mode implementation
     const userCount = originalVolumes.size || mockUsers.length;
     logger.info(`Mock restoring ${userCount} users over 350ms`);
@@ -129,9 +188,14 @@ export async function restoreDiscordVolume(): Promise<void> {
     return;
   }
 
+  if (process.platform !== 'win32') {
+    logger.warn('Windows Discord session volume control is only available on Windows');
+    return;
+  }
+
   // Real Discord RPC adapter
   try {
-    const userCount = originalVolumes.size;
+    const userCount = originalSessions.size;
     
     if (userCount === 0) {
       logger.warn('No volumes to restore (originalVolumes is empty)');
@@ -140,21 +204,24 @@ export async function restoreDiscordVolume(): Promise<void> {
     }
 
     logger.info('=== Starting Discord Volume Restore Workflow ===');
-    logger.info(`Step 1: Restoring ${userCount} users over 350ms`);
+    logger.info(`Step 1: Restoring ${userCount} Discord audio sessions over 350ms`);
 
     // Build fade map: userId -> {from, to}
-    const fadeMap = new Map<string, { from: number; to: number }>();
-    for (const [userId, targetVolume] of originalVolumes.entries()) {
-      const fromVolume = currentVolumes.get(userId) ?? 0;
-      fadeMap.set(userId, { from: fromVolume, to: targetVolume });
+    const fadeMap = new Map<string, { session: AudioSessionSnapshot; from: number; to: number }>();
+    for (const [sessionKey, session] of originalSessions.entries()) {
+      const targetVolume = originalVolumes.get(sessionKey) ?? clampVolume(session.volume);
+      const fromVolume = currentVolumes.get(sessionKey) ?? clampVolume(session.volume);
+      fadeMap.set(sessionKey, { session, from: fromVolume, to: targetVolume });
     }
 
     // Fade all users in parallel over 350ms with 4 steps
-    await fadeUserVolumes(fadeMap, 350, 4);
+    await fadeSessionVolumes(fadeMap, 350, 4);
 
-    logger.info(`✓ Successfully restored ${userCount} users`);
+    logger.info(`✓ Successfully restored ${userCount} Discord audio sessions`);
     
     originalVolumes.clear();
+    originalSessions.clear();
+    currentVolumes.clear();
     clutchActive = false;
     
     logger.info('Step 2: Cleared volume cache');
@@ -163,6 +230,8 @@ export async function restoreDiscordVolume(): Promise<void> {
     logger.error('⚠ Discord volume restore workflow failed');
     logger.error(`  Error: ${error?.message || 'Unknown error'}`);
     originalVolumes.clear();
+    originalSessions.clear();
+    currentVolumes.clear();
     clutchActive = false;
   }
 }
@@ -317,6 +386,20 @@ async function fadeUserVolumes(
 }
 
 export async function getSelectedVoiceChannel(): Promise<SelectedVoiceChannel | null> {
+  if (process.platform === 'win32') {
+    const sessions = await getDiscordAudioSessions();
+    if (sessions.length === 0) {
+      return null;
+    }
+
+    return {
+      id: 'windows-discord-session',
+      name: 'Discord Application',
+      guildId: undefined,
+      users: toVoiceChannelUsers(sessions),
+    };
+  }
+
   const client = getRpcClient();
   if (!client || !isConnected()) {
     return null;
@@ -355,6 +438,15 @@ export async function getSelectedVoiceChannel(): Promise<SelectedVoiceChannel | 
 }
 
 export async function getVoiceChannelUsers(channelId: string): Promise<VoiceChannelUser[]> {
+  if (process.platform === 'win32') {
+    if (channelId !== 'windows-discord-session') {
+      return [];
+    }
+
+    const sessions = await getDiscordAudioSessions();
+    return toVoiceChannelUsers(sessions);
+  }
+
   const client = getRpcClient();
   if (!client || !isConnected()) {
     return [];
@@ -387,6 +479,20 @@ export async function getVoiceChannelUsers(channelId: string): Promise<VoiceChan
 }
 
 export async function setUserVolume(userId: string, volume: number): Promise<void> {
+  if (process.platform === 'win32') {
+    const sessions = await getDiscordAudioSessions();
+    const targetSession = sessions.find(session => session.sessionKey === userId) || originalSessions.get(userId);
+    if (!targetSession) {
+      logger.warn(`Cannot set user volume: Discord session ${userId} not found`);
+      return;
+    }
+
+    const clampedVolume = clampVolume(volume);
+    await setProcessAudioSessionVolumes([{ ...targetSession, volume: clampedVolume }]);
+    currentVolumes.set(userId, clampedVolume);
+    return;
+  }
+
   const client = getRpcClient();
   if (!client || !isConnected()) {
     logger.warn('Cannot set user volume: Discord not connected');
@@ -415,6 +521,28 @@ export async function setUserVolume(userId: string, volume: number): Promise<voi
 }
 
 export async function restoreVolumes(volumeMap: VolumeMap): Promise<void> {
+  if (process.platform === 'win32') {
+    const sessions = await getDiscordAudioSessions();
+    const updates = sessions
+      .filter(session => volumeMap[session.sessionKey] !== undefined)
+      .map(session => ({
+        ...session,
+        volume: clampVolume(volumeMap[session.sessionKey]),
+      }));
+
+    if (updates.length === 0) {
+      logger.warn('No Discord audio sessions matched the requested restore map');
+      return;
+    }
+
+    await setProcessAudioSessionVolumes(updates);
+    for (const session of updates) {
+      currentVolumes.set(session.sessionKey, clampVolume(session.volume));
+    }
+    logger.info('Volumes restored from map');
+    return;
+  }
+
   logger.info(`Restoring volumes for ${Object.keys(volumeMap).length} users`);
 
   if (!isConnected()) {
